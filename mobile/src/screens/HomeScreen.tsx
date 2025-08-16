@@ -504,6 +504,32 @@ export default function HomeScreen() {
       setUploading(true);
       console.log('🚀 Starting comprehensive health data upload to Walrus blockchain...');
       
+      // Debug: Check healthData structure
+      console.log('🔍 Health data structure:', {
+        type: typeof healthData,
+        keys: Object.keys(healthData || {}),
+        hrv: {
+          type: typeof healthData.hrv,
+          isArray: Array.isArray(healthData.hrv),
+          length: healthData.hrv?.length
+        },
+        rhr: {
+          type: typeof healthData.rhr,
+          isArray: Array.isArray(healthData.rhr),
+          length: healthData.rhr?.length
+        },
+        weight: {
+          type: typeof healthData.weight,
+          isArray: Array.isArray(healthData.weight),
+          length: healthData.weight?.length
+        },
+        exercise: {
+          type: typeof healthData.exercise,
+          isArray: Array.isArray(healthData.exercise),
+          length: healthData.exercise?.length
+        }
+      });
+      
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - 30);
@@ -516,41 +542,41 @@ export default function HomeScreen() {
       
       const comprehensiveHealthData = {
         // Core health metrics (anonymized)
-        heart_rate_variability: healthData.hrv?.map(item => ({
+        heart_rate_variability: Array.isArray(healthData.hrv) ? healthData.hrv.map(item => ({
           ...item,
           // Remove any personal identifiers
           user_id: undefined,
           device_serial: undefined,
           source: 'health_app' // Anonymized source
-        })) || [],
+        })) : [],
         
-        resting_heart_rate: healthData.rhr?.map(item => ({
+        resting_heart_rate: Array.isArray(healthData.rhr) ? healthData.rhr.map(item => ({
           ...item,
           user_id: undefined,
           device_serial: undefined,
           source: 'health_app'
-        })) || [],
+        })) : [],
         
-        weight_measurements: healthData.weight?.map(item => ({
+        weight_measurements: Array.isArray(healthData.weight) ? healthData.weight.map(item => ({
           ...item,
           user_id: undefined,
           device_serial: undefined,
           source: 'health_app'
-        })) || [],
+        })) : [],
         
-        exercise_sessions: healthData.exercise?.map(item => ({
+        exercise_sessions: Array.isArray(healthData.exercise) ? healthData.exercise.map(item => ({
           ...item,
           user_id: undefined,
           device_serial: undefined,
           source: 'health_app'
-        })) || [],
+        })) : [],
         
-        calories_data: healthData.calories?.map(item => ({
+        calories_data: Array.isArray(healthData.calories) ? healthData.calories.map(item => ({
           ...item,
           user_id: undefined,
           device_serial: undefined,
           source: 'health_app'
-        })) || [],
+        })) : [],
         
         // Biological age analysis (anonymized)
         biological_age_analysis: biologicalAge ? {
@@ -581,7 +607,9 @@ export default function HomeScreen() {
             data_quality: 'high_fidelity'
           },
           metrics_summary: {
-            total_metrics: Object.keys(healthData).filter(key => healthData[key]?.length > 0).length,
+            total_metrics: Object.keys(healthData).filter(key => 
+              Array.isArray(healthData[key]) && healthData[key].length > 0
+            ).length,
             total_data_points: Object.values(healthData).reduce((total, data) => 
               total + (Array.isArray(data) ? data.length : 0), 0),
             sampling_frequency: 'variable_per_metric'

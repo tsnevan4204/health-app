@@ -70,10 +70,13 @@ class WalrusService {
   }
 
   private async uploadToTestnet(data: string, encrypt: boolean = true): Promise<WalrusBlob> {
+    console.log('🚀 Starting Walrus testnet upload...');
+    
     // Encrypt data if requested
     let uploadData: string;
     
     if (encrypt) {
+      console.log('🔐 Encrypting data before upload...');
       const encryptionMetadata = await EncryptionService.encrypt(data);
       uploadData = JSON.stringify(encryptionMetadata);
     } else {
@@ -82,19 +85,35 @@ class WalrusService {
 
     // Convert string to buffer for upload
     const buffer = Buffer.from(uploadData);
+    console.log(`📦 Data prepared for upload: ${buffer.length} bytes`);
     
-    // Try multiple Walrus endpoints (correct v1 API path)
+    // Check data size limits (Walrus has size limits)
+    if (buffer.length > 10 * 1024 * 1024) { // 10MB limit
+      console.warn('⚠️ Data size exceeds 10MB, may cause upload issues');
+    }
+    
+    // Try multiple Walrus endpoints with improved error handling
     const endpoints = [
-      `${this.publisherURL}/v1/blobs`,
-      'https://publisher.walrus-testnet.walrus.space/v1/blobs',
-      'https://walrus-testnet-publisher.blockeden.xyz/v1/blobs',
-      'https://walrus-publisher-testnet.bartestnet.com/v1/blobs'
+      'https://publisher.walrus-testnet.walrus.space/v1/store', // Official endpoint
+      `${this.publisherURL}/v1/store`, // Configured endpoint
+      'https://walrus-testnet-publisher.nodeinfra.com/v1/store', // Alternative
     ];
 
     let lastError: any;
+    let attemptCount = 0;
+    
     for (const endpoint of endpoints) {
       try {
-        console.log(`Trying Walrus endpoint: ${endpoint}`);
+        attemptCount++;
+        console.log(`📡 Attempt ${attemptCount}: Trying Walrus endpoint: ${endpoint}`);
+        
+        // Test endpoint connectivity first
+        try {
+          const healthCheck = await axios.get(endpoint.replace('/v1/store', '/health'), { timeout: 5000 });
+          console.log(`✅ Endpoint ${endpoint} is reachable`);
+        } catch (healthError) {
+          console.warn(`⚠️ Endpoint health check failed for ${endpoint}, but continuing...`);
+        }
         
         const response = await axios.put(
           endpoint,
@@ -102,42 +121,66 @@ class WalrusService {
           {
             headers: {
               'Content-Type': 'application/octet-stream',
+              'User-Agent': 'Wellrus-Health-App/1.0',
             },
             maxBodyLength: Infinity,
             maxContentLength: Infinity,
-            timeout: 30000, // 30 second timeout
+            timeout: 60000, // Increased to 60 seconds
+            validateStatus: (status) => status >= 200 && status < 300,
           }
         );
 
-        // Extract blob ID from response
+        console.log(`✅ Upload successful! Status: ${response.status}`);
+        console.log('📋 Response headers:', response.headers);
+        
+        // Extract blob ID from response with better error handling
         let blobId: string;
         let objectId: string;
         
-        console.log('Raw Walrus response:', JSON.stringify(response.data, null, 2));
+        console.log('📄 Raw Walrus response:', JSON.stringify(response.data, null, 2));
         
-        if (response.data.newlyCreated) {
-          blobId = response.data.newlyCreated.blobObject.blobId;
-          objectId = response.data.newlyCreated.blobObject.id;
-        } else if (response.data.alreadyCertified) {
-          blobId = response.data.alreadyCertified.blobId;
-          objectId = response.data.alreadyCertified.object?.id || response.data.alreadyCertified.blobId;
+        if (response.data && typeof response.data === 'object') {
+          if (response.data.newlyCreated && response.data.newlyCreated.blobObject) {
+            blobId = response.data.newlyCreated.blobObject.blobId;
+            objectId = response.data.newlyCreated.blobObject.id;
+            console.log('✅ Found newlyCreated blob');
+          } else if (response.data.alreadyCertified) {
+            blobId = response.data.alreadyCertified.blobId;
+            objectId = response.data.alreadyCertified.object?.id || response.data.alreadyCertified.blobId;
+            console.log('✅ Found alreadyCertified blob');
+          } else if (response.data.blobId) {
+            // Direct blob ID in response
+            blobId = response.data.blobId;
+            objectId = response.data.objectId || blobId;
+            console.log('✅ Found direct blob ID');
+          } else {
+            console.error('❌ Unexpected response format:', response.data);
+            throw new Error(`Unexpected response format from Walrus: ${JSON.stringify(response.data)}`);
+          }
         } else {
-          throw new Error('Unexpected response format from Walrus');
+          throw new Error(`Invalid response data type: ${typeof response.data}`);
+        }
+
+        // Validate blob ID format
+        if (!blobId || typeof blobId !== 'string') {
+          throw new Error(`Invalid blob ID received: ${blobId}`);
         }
 
         // Calculate checksum
         const checksum = await EncryptionService.hashData(uploadData);
         
-        // Log Walrus explorer link using walruscan.com
+        // Log success with detailed information
         const explorerUrl = `https://walruscan.com/testnet/blob/${blobId}`;
         console.log('');
-        console.log('🐋 ================ WALRUS UPLOAD (TESTNET) ================');
+        console.log('🎉 ================ WALRUS UPLOAD SUCCESS ================');
         console.log(`✅ Blob ID: ${blobId}`);
         console.log(`🆔 Object ID: ${objectId}`);
         console.log(`🔗 Walruscan: ${explorerUrl}`);
         console.log(`📦 Size: ${buffer.length} bytes`);
         console.log(`🌐 Endpoint: ${endpoint}`);
-        console.log('=========================================================');
+        console.log(`🔐 Encrypted: ${encrypt}`);
+        console.log(`📊 Checksum: ${checksum}`);
+        console.log('========================================================');
         console.log('');
         
         return {
@@ -147,14 +190,33 @@ class WalrusService {
           size: buffer.length,
           createdAt: new Date().toISOString(),
         };
+        
       } catch (error) {
         lastError = error;
-        console.warn(`Failed with endpoint ${endpoint}:`, error);
+        console.error(`❌ Failed with endpoint ${endpoint}:`, error);
+        
+        if (axios.isAxiosError(error)) {
+          console.error(`📡 Status: ${error.response?.status}`);
+          console.error(`📝 Status Text: ${error.response?.statusText}`);
+          console.error(`📄 Response Data:`, error.response?.data);
+          console.error(`🌐 Request URL: ${error.config?.url}`);
+          console.error(`📋 Request Headers:`, error.config?.headers);
+        }
+        
+        // Continue to next endpoint
         continue;
       }
     }
 
-    throw lastError || new Error('All Walrus endpoints failed');
+    // All endpoints failed
+    console.error('❌ All Walrus endpoints failed');
+    console.error('🔧 Troubleshooting suggestions:');
+    console.error('  1. Check internet connectivity');
+    console.error('  2. Verify Walrus testnet is operational');
+    console.error('  3. Try reducing data size');
+    console.error('  4. Check Walrus service status');
+    
+    throw lastError || new Error('All Walrus endpoints failed - check network connectivity and Walrus testnet status');
   }
 
   private async simulateUpload(data: string, encrypt: boolean = true): Promise<WalrusBlob> {
