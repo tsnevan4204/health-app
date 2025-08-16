@@ -9,70 +9,13 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import flowBlockchainService, { FlowTransaction } from '../services/flowBlockchainHTTP';
-import HealthNFTService, { HealthBountyNFT, HealthDataBundleNFT } from '../services/healthNFTService';
-
-interface DataPackage {
-  id: string;
-  title: string;
-  description: string;
-  metrics: string[];
-  duration: string;
-  samples: number;
-  price: number;
-  currency: string;
-  category: string;
-  rarity: 'Common' | 'Rare' | 'Epic' | 'Legendary';
-}
-
-interface ListedPackage extends DataPackage {
-  status: 'active' | 'sold' | 'pending';
-  views: number;
-  listedAt: Date;
-  transactionId?: string;
-}
+import flowBlockchainService from '../services/flowBlockchainHTTP';
+import HealthNFTService, { HealthBountyNFT } from '../services/healthNFTService';
 
 export default function SellScreen() {
-  const [availablePackages, setAvailablePackages] = useState<DataPackage[]>([
-    {
-      id: 'hrv_30d',
-      title: 'HRV Premium Dataset',
-      description: '30 days of high-quality heart rate variability data from active individual',
-      metrics: ['HRV', 'Sleep Quality', 'Stress Levels'],
-      duration: '30 days',
-      samples: 720,
-      price: 25.5,
-      currency: 'FLOW',
-      category: 'Cardiovascular',
-      rarity: 'Epic',
-    },
-    {
-      id: 'complete_wellness',
-      title: 'Complete Wellness Bundle',
-      description: 'Comprehensive health metrics including HRV, exercise, weight, and heart rate',
-      metrics: ['HRV', 'RHR', 'Weight', 'Exercise', 'Biological Age'],
-      duration: '30 days',
-      samples: 150,
-      price: 45.0,
-      currency: 'FLOW',
-      category: 'Wellness',
-      rarity: 'Legendary',
-    },
-    {
-      id: 'exercise_data',
-      title: 'Athletic Performance Data',
-      description: 'Daily exercise minutes and intensity data from fitness enthusiast',
-      metrics: ['Exercise Minutes', 'Heart Rate Zones', 'Recovery'],
-      duration: '30 days',
-      samples: 30,
-      price: 15.0,
-      currency: 'FLOW',
-      category: 'Fitness',
-      rarity: 'Rare',
-    },
-  ]);
 
-  const [listedPackages, setListedPackages] = useState<ListedPackage[]>([]);
+
+
   const [healthBounties, setHealthBounties] = useState<HealthBountyNFT[]>([]);
   const [loading, setLoading] = useState(false);
   const [testnetStatus, setTestnetStatus] = useState<{
@@ -127,119 +70,9 @@ export default function SellScreen() {
     }
   };
 
-  const mintHealthDataBundleNFT = async (packageData: DataPackage): Promise<HealthDataBundleNFT> => {
-    console.log('🌊 Starting Health Data Bundle NFT creation...');
-    
-    // Simulate anonymized health data for this package
-    const mockHealthData = {
-      [packageData.metrics[0]]: Array.from({ length: packageData.samples }, (_, i) => ({
-        timestamp: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString(),
-        metric: packageData.metrics[0],
-        value: Math.random() * 100,
-        unit: 'units',
-        source: 'health_app',
-        device: 'smartwatch'
-      }))
-    };
 
-    return await HealthNFTService.createHealthDataBundleNFT(mockHealthData, {
-      title: packageData.title,
-      description: packageData.description,
-      category: packageData.category,
-      customPrice: packageData.price
-    });
-  };
 
-  const listDataPackage = async (dataPackage: DataPackage) => {
-    try {
-      setLoading(true);
-      
-      Alert.alert(
-        'List Data Package',
-        `Are you sure you want to list "${dataPackage.title}" for ${dataPackage.price} FLOW?\n\nThis will:\n• Create an NFT on Flow blockchain\n• Anonymize your data\n• Make it available in the marketplace`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'List for Sale',
-            onPress: async () => {
-              try {
-                console.log('🚀 Creating Health Data Bundle NFT with anonymization...');
-                
-                // Create Health Data Bundle NFT with anonymization
-                const bundleNFT = await mintHealthDataBundleNFT(dataPackage);
-                
-                const listedPackage: ListedPackage = {
-                  ...dataPackage,
-                  status: bundleNFT.status === 'listed' ? 'active' : 'pending',
-                  views: 0,
-                  listedAt: new Date(),
-                  transactionId: bundleNFT.transactionId,
-                };
 
-                setListedPackages(prev => [...prev, listedPackage]);
-                setAvailablePackages(prev => prev.filter(p => p.id !== dataPackage.id));
-
-                const explorerUrl = bundleNFT.transactionId ? 
-                  flowBlockchainService.getTestnetExplorerUrl(bundleNFT.transactionId) : '';
-                const walruscanUrl = bundleNFT.walrusManifestId ? 
-                  `https://walruscan.com/testnet/blob/${bundleNFT.walrusManifestId}` : '';
-                
-                // Show success alert with comprehensive details
-                const statusEmoji = '🎉';
-                const statusText = 'NFT Created Successfully!';
-                
-                Alert.alert(
-                  `${statusText} ${statusEmoji}`,
-                  `Your anonymized health data bundle NFT has been created!\n\n📦 Bundle ID: ${bundleNFT.id}\n💎 Rarity: ${bundleNFT.rarity}\n📊 Metrics: ${bundleNFT.metrics.length}\n📈 Samples: ${bundleNFT.samplesCount}\n💰 Price: ${bundleNFT.price} FLOW\n🔒 Privacy: ${bundleNFT.anonymizationLevel}\n\n🌊 Flow TX: ${bundleNFT.transactionId}\n🐋 Walrus: ${bundleNFT.walrusManifestId}`,
-                  [
-                    { 
-                      text: 'View Walruscan', 
-                      onPress: () => {
-                        console.log('🔗 Opening Walruscan:', walruscanUrl);
-                        // In a real app, you would open the URL in a browser
-                        // Linking.openURL(walruscanUrl);
-                      }
-                    },
-                    { 
-                      text: 'View Flow Explorer', 
-                      onPress: () => {
-                        console.log('🔗 Opening Flow explorer:', explorerUrl);
-                        // Linking.openURL(explorerUrl);
-                      }
-                    },
-                    { text: 'OK', style: 'default' }
-                  ]
-                );
-              } catch (error) {
-                console.error('❌ Flow transaction error:', error);
-                
-                // Enhanced error logging
-                console.error('🔧 Troubleshooting:');
-                console.error('  1. Check testnet connection');
-                console.error('  2. Verify service account has FLOW tokens');
-                console.error('  3. Ensure contract is deployed on testnet');
-                console.error('  4. Visit https://testnet-faucet.onflow.org/ for tokens');
-                
-                Alert.alert(
-                  'Transaction Failed ❌', 
-                  `Failed to mint NFT on Flow testnet.\n\nError: ${error instanceof Error ? error.message : 'Unknown error'}\n\n🔧 Common solutions:\n• Check internet connection\n• Verify testnet tokens in service account\n• Try again in a few moments\n\n💰 Need testnet tokens? Visit:\nhttps://testnet-faucet.onflow.org/`,
-                  [
-                    { text: 'Get Testnet Tokens', onPress: () => console.log('💰 Visit: https://testnet-faucet.onflow.org/') },
-                    { text: 'OK', style: 'cancel' }
-                  ]
-                );
-              }
-            }
-          }
-        ]
-      );
-    } catch (error) {
-      console.error('Error listing package:', error);
-      Alert.alert('Error', 'Failed to list data package');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const viewMarketplace = () => {
     Alert.alert(
@@ -249,75 +82,28 @@ export default function SellScreen() {
     );
   };
 
-  const PackageCard = ({ package: pkg, onList }: { package: DataPackage; onList: () => void }) => (
-    <View style={styles.packageCard}>
-      <View style={styles.packageHeader}>
-        <View style={styles.packageInfo}>
-          <Text style={styles.packageTitle}>{pkg.title}</Text>
-          <View style={[styles.rarityBadge, { backgroundColor: getRarityColor(pkg.rarity) }]}>
-            <Text style={styles.rarityText}>{pkg.rarity}</Text>
-          </View>
-        </View>
-        <View style={styles.priceContainer}>
-          <Text style={styles.price}>{pkg.price}</Text>
-          <Text style={styles.currency}>{pkg.currency}</Text>
-        </View>
-      </View>
-      
-      <Text style={styles.packageDescription}>{pkg.description}</Text>
-      
-      <View style={styles.packageStats}>
-        <View style={styles.stat}>
-          <Text style={styles.statLabel}>Duration</Text>
-          <Text style={styles.statValue}>{pkg.duration}</Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={styles.statLabel}>Samples</Text>
-          <Text style={styles.statValue}>{pkg.samples}</Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={styles.statLabel}>Category</Text>
-          <Text style={styles.statValue}>{pkg.category}</Text>
-        </View>
-      </View>
+  const submitToBounty = async (bounty: HealthBountyNFT) => {
+    Alert.alert(
+      'Submit Health Data',
+      `Submit your anonymized health data to: "${bounty.title}"\n\nRequired metrics: ${bounty.requiredMetrics.join(', ')}\nReward: ${bounty.rewardAmount} FLOW\n\nThis will:\n• Upload your anonymized health data to Walrus\n• Remove all personal information\n• Create encrypted data stream\n• Submit to research bounty`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Submit Data',
+          onPress: () => {
+            Alert.alert(
+              'Data Submitted! 🎯',
+              `Your anonymized health data has been submitted to the research bounty!\n\n📊 Metrics: ${bounty.requiredMetrics.join(', ')}\n💰 Reward: ${bounty.rewardAmount} FLOW\n🔒 Privacy: Fully anonymized\n\nResearchers will review your submission and rewards will be distributed upon acceptance.\n\nGo to the Home tab to upload your health data as an encrypted stream to Walrus.`
+            );
+          }
+        }
+      ]
+    );
+  };
 
-      <View style={styles.metricsContainer}>
-        <Text style={styles.metricsLabel}>Included Metrics:</Text>
-        <View style={styles.metricsRow}>
-          {pkg.metrics.map((metric, index) => (
-            <View key={index} style={styles.metricTag}>
-              <Text style={styles.metricText}>{metric}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
 
-      <TouchableOpacity style={styles.listButton} onPress={onList}>
-        <Text style={styles.listButtonText}>🌊 List on Flow</Text>
-      </TouchableOpacity>
-    </View>
-  );
 
-  const ListedCard = ({ package: pkg }: { package: ListedPackage }) => (
-    <View style={[styles.packageCard, styles.listedCard]}>
-      <View style={styles.listedHeader}>
-        <Text style={styles.packageTitle}>{pkg.title}</Text>
-        <View style={[styles.statusBadge, styles[`${pkg.status}Status`]]}>
-          <Text style={styles.statusText}>{pkg.status.toUpperCase()}</Text>
-        </View>
-      </View>
-      
-      <View style={styles.listedStats}>
-        <Text style={styles.listedStat}>💰 {pkg.price} FLOW</Text>
-        <Text style={styles.listedStat}>👁 {pkg.views} views</Text>
-        <Text style={styles.listedStat}>📅 {pkg.listedAt.toLocaleDateString()}</Text>
-      </View>
-      
-      {pkg.transactionId && (
-        <Text style={styles.transactionId}>TX: {pkg.transactionId}</Text>
-      )}
-    </View>
-  );
+
 
   const BountyCard = ({ bounty }: { bounty: HealthBountyNFT }) => (
     <View style={[styles.packageCard, styles.bountyCard]}>
@@ -362,7 +148,7 @@ export default function SellScreen() {
         </View>
       </View>
 
-      <TouchableOpacity style={styles.submitButton}>
+      <TouchableOpacity style={styles.submitButton} onPress={() => submitToBounty(bounty)}>
         <Text style={styles.submitButtonText}>🎯 Submit Data</Text>
       </TouchableOpacity>
     </View>
@@ -373,8 +159,8 @@ export default function SellScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Sell Your Data</Text>
-          <Text style={styles.subtitle}>Monetize your health data on Flow blockchain</Text>
+          <Text style={styles.title}>Health Research Marketplace</Text>
+          <Text style={styles.subtitle}>Earn rewards by contributing anonymized health data to research</Text>
         </View>
 
         {/* Flow Blockchain Info */}
@@ -417,43 +203,14 @@ export default function SellScreen() {
           ))}
         </View>
 
-        {/* Available Packages */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📦 Available Data Packages</Text>
-          <Text style={styles.sectionSubtitle}>Create NFTs from your health data</Text>
-          
-          {availablePackages.map((pkg) => (
-            <PackageCard
-              key={pkg.id}
-              package={pkg}
-              onList={() => listDataPackage(pkg)}
-            />
-          ))}
-          
-          {availablePackages.length === 0 && (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No data packages available</Text>
-              <Text style={styles.emptySubtext}>Generate health data on the Home tab to create packages</Text>
-            </View>
-          )}
-        </View>
 
-        {/* Listed Packages */}
-        {listedPackages.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Your Listed Packages</Text>
-            <Text style={styles.sectionSubtitle}>Active on Flow marketplace</Text>
-            
-            {listedPackages.map((pkg, index) => (
-              <ListedCard key={`${pkg.id}-${index}`} package={pkg} />
-            ))}
-          </View>
-        )}
+
+
 
         {loading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#007AFF" />
-            <Text style={styles.loadingText}>Creating NFT on Flow...</Text>
+            <Text style={styles.loadingText}>Submitting to bounty...</Text>
           </View>
         )}
       </ScrollView>

@@ -609,27 +609,10 @@ export default function HomeScreen() {
         });
         updateUploadStatuses([...statuses]);
 
-        // Also create Health Data Bundle NFT
-        try {
-          console.log('🎨 Creating Health Data Bundle NFT...');
-          
-          const bundleNFT = await HealthNFTService.createHealthDataBundleNFT(healthData, {
-            title: `Health Data Bundle - ${new Date().toLocaleDateString()}`,
-            description: `Anonymized health metrics bundle containing data from ${metrics.length} different health metrics`,
-            category: 'Personal Health Data'
-          });
-          
-          Alert.alert(
-            'Upload & NFT Complete! 🎉',
-            `Successfully uploaded ${blobs.size} metrics to Walrus and created NFT!\n\n📦 Bundle NFT ID: ${bundleNFT.id}\n💎 Rarity: ${bundleNFT.rarity}\n💰 Price: ${bundleNFT.price} FLOW\n🔒 Privacy: Fully anonymized\n\n🐋 Walrus Manifest: ${manifestBlob.id}\n🌊 Flow Transaction: ${bundleNFT.transactionId}\n\nAll personal information has been removed and data is encrypted.`
-          );
-        } catch (nftError) {
-          console.error('NFT creation failed:', nftError);
-          Alert.alert(
-            'Upload Complete! 🎉',
-            `Successfully uploaded ${blobs.size} metrics to Walrus!\n\nManifest ID: ${manifestBlob.id}\n\nAll data has been encrypted and stored securely. NFT creation failed but data is safely stored.`
-          );
-        }
+        Alert.alert(
+          'Upload Complete! 🎉',
+          `Successfully uploaded ${blobs.size} metrics to Walrus as encrypted data stream!\n\n🐋 Walrus Manifest: ${manifestBlob.id}\n🔗 View on Walruscan: https://walruscan.com/testnet/blob/${manifestBlob.id}\n\n🔒 Privacy: All personal information removed and data encrypted\n📊 Metrics uploaded: ${Array.from(blobs.keys()).join(', ')}`
+        );
       }
     } catch (error) {
       console.error('Upload error:', error);
