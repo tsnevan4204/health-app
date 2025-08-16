@@ -7,6 +7,13 @@ export const ENV = {
   
   // Flow blockchain configuration
   FLOW_ADDRESS: Constants.expoConfig?.extra?.flowAddress || process.env.FLOW_ADDRESS || '0x9e70bb43090ff282',
+  FLOW_TESTNET_ACCESS_NODE: process.env.FLOW_TESTNET_ACCESS_NODE || 'https://rest-testnet.onflow.org',
+  FLOW_TESTNET_DISCOVERY: process.env.FLOW_TESTNET_DISCOVERY || 'https://fcl-discovery.onflow.org/testnet/authn',
+  
+  // Walrus configuration (updated 2025 endpoints)
+  WALRUS_PUBLISHER_URL: process.env.WALRUS_PUBLISHER_URL || 'https://publisher.walrus-testnet.walrus.space',
+  WALRUS_AGGREGATOR_URL: process.env.WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space',
+  WALRUS_TESTNET_URL: process.env.WALRUS_TESTNET_URL || 'https://walrus-testnet.mystenlabs.com',
   
   // Development flags
   isDevelopment: __DEV__,

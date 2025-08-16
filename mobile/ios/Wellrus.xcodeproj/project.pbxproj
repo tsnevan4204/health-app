@@ -7,26 +7,26 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		01375C1D1EFC941BE0F5E03B /* libPods-Wellrus.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 8F72477A8CD73132D553FF24 /* libPods-Wellrus.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		943E7B682E4E30AF3255D390 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A2C68D249CCC7E97D831E0D6 /* PrivacyInfo.xcprivacy */; };
+		5130C02CC8F4C1AAA10D2BF8 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D60F333680B1AF2EFF6127D8 /* PrivacyInfo.xcprivacy */; };
+		A8C74AB8EC6D1C38B52C821C /* libPods-Wellrus.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 8D2C7D9EF5A3780A0DA9B11D /* libPods-Wellrus.a */; };
+		B9B2ACFED76D843709AF0750 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65FA9C1A8FA6370C1F85576B /* ExpoModulesProvider.swift */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		CD84FEA861BD85673F5B41F2 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54B0B122255D05A6E7893ED5 /* ExpoModulesProvider.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		077145F2F5C00D431AA50917 /* Pods-Wellrus.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Wellrus.release.xcconfig"; path = "Target Support Files/Pods-Wellrus/Pods-Wellrus.release.xcconfig"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* Wellrus.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Wellrus.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Wellrus/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Wellrus/Info.plist; sourceTree = "<group>"; };
-		31044145763BF5C2B1485014 /* Pods-Wellrus.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Wellrus.debug.xcconfig"; path = "Target Support Files/Pods-Wellrus/Pods-Wellrus.debug.xcconfig"; sourceTree = "<group>"; };
-		54B0B122255D05A6E7893ED5 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Wellrus/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		8F72477A8CD73132D553FF24 /* libPods-Wellrus.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Wellrus.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		A2C68D249CCC7E97D831E0D6 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Wellrus/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		65FA9C1A8FA6370C1F85576B /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Wellrus/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		8D2C7D9EF5A3780A0DA9B11D /* libPods-Wellrus.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Wellrus.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Wellrus/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
+		D60F333680B1AF2EFF6127D8 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Wellrus/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		D991BBF82FF47FA756320AE1 /* Pods-Wellrus.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Wellrus.release.xcconfig"; path = "Target Support Files/Pods-Wellrus/Pods-Wellrus.release.xcconfig"; sourceTree = "<group>"; };
+		EC8F183C42D0B4185EF812CD /* Pods-Wellrus.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Wellrus.debug.xcconfig"; path = "Target Support Files/Pods-Wellrus/Pods-Wellrus.debug.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Wellrus/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Wellrus-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Wellrus-Bridging-Header.h"; path = "Wellrus/Wellrus-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -37,7 +37,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				01375C1D1EFC941BE0F5E03B /* libPods-Wellrus.a in Frameworks */,
+				A8C74AB8EC6D1C38B52C821C /* libPods-Wellrus.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -53,43 +53,35 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				A2C68D249CCC7E97D831E0D6 /* PrivacyInfo.xcprivacy */,
+				D60F333680B1AF2EFF6127D8 /* PrivacyInfo.xcprivacy */,
 			);
 			name = Wellrus;
+			sourceTree = "<group>";
+		};
+		189E1A09BB29CCAD47861E9E /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				EC8F183C42D0B4185EF812CD /* Pods-Wellrus.debug.xcconfig */,
+				D991BBF82FF47FA756320AE1 /* Pods-Wellrus.release.xcconfig */,
+			);
+			path = Pods;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				8F72477A8CD73132D553FF24 /* libPods-Wellrus.a */,
+				8D2C7D9EF5A3780A0DA9B11D /* libPods-Wellrus.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		373B1CB298CE182EF5A5B08E /* Pods */ = {
+		734A072CDF99113A5DF29A89 /* Wellrus */ = {
 			isa = PBXGroup;
 			children = (
-				31044145763BF5C2B1485014 /* Pods-Wellrus.debug.xcconfig */,
-				077145F2F5C00D431AA50917 /* Pods-Wellrus.release.xcconfig */,
-			);
-			path = Pods;
-			sourceTree = "<group>";
-		};
-		39D8AAFFAF44B40672F9AE66 /* Wellrus */ = {
-			isa = PBXGroup;
-			children = (
-				54B0B122255D05A6E7893ED5 /* ExpoModulesProvider.swift */,
+				65FA9C1A8FA6370C1F85576B /* ExpoModulesProvider.swift */,
 			);
 			name = Wellrus;
-			sourceTree = "<group>";
-		};
-		669E1866AB754A3BA027CDCD /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				39D8AAFFAF44B40672F9AE66 /* Wellrus */,
-			);
-			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -106,8 +98,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				373B1CB298CE182EF5A5B08E /* Pods */,
-				669E1866AB754A3BA027CDCD /* ExpoModulesProviders */,
+				189E1A09BB29CCAD47861E9E /* Pods */,
+				FD7379120613860751D417EC /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -131,6 +123,14 @@
 			path = Wellrus/Supporting;
 			sourceTree = "<group>";
 		};
+		FD7379120613860751D417EC /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				734A072CDF99113A5DF29A89 /* Wellrus */,
+			);
+			name = ExpoModulesProviders;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -139,13 +139,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Wellrus" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				FEC1BEFF934E6BBA070FBC1B /* [Expo] Configure project */,
+				F387FDB2A1DDCC73B8CB1BC3 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				40EF3A730C96E6BD50246510 /* [CP] Embed Pods Frameworks */,
+				6DF547D10B5714447987E37C /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -195,7 +195,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				943E7B682E4E30AF3255D390 /* PrivacyInfo.xcprivacy in Resources */,
+				5130C02CC8F4C1AAA10D2BF8 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -239,7 +239,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		40EF3A730C96E6BD50246510 /* [CP] Embed Pods Frameworks */ = {
+		6DF547D10B5714447987E37C /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -295,7 +295,7 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Wellrus/Pods-Wellrus-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		FEC1BEFF934E6BBA070FBC1B /* [Expo] Configure project */ = {
+		F387FDB2A1DDCC73B8CB1BC3 /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -322,7 +322,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				CD84FEA861BD85673F5B41F2 /* ExpoModulesProvider.swift in Sources */,
+				B9B2ACFED76D843709AF0750 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -331,7 +331,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 31044145763BF5C2B1485014 /* Pods-Wellrus.debug.xcconfig */;
+			baseConfigurationReference = EC8F183C42D0B4185EF812CD /* Pods-Wellrus.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -368,7 +368,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 077145F2F5C00D431AA50917 /* Pods-Wellrus.release.xcconfig */;
+			baseConfigurationReference = D991BBF82FF47FA756320AE1 /* Pods-Wellrus.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
