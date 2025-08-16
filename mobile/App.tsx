@@ -56,7 +56,7 @@ export default function App() {
         <Tab.Screen 
           name="Home" 
           component={HomeScreen}
-          options={{ title: 'Health Data' }}
+          options={{ title: 'Wellrus' }}
         />
         <Tab.Screen 
           name="Ask" 

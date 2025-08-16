@@ -441,7 +441,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Import Health Data</Text>
+        <Text style={styles.title}>Wellrus</Text>
         
         {/* Biological Age Display */}
         {biologicalAge && (
