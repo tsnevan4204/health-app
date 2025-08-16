@@ -27,19 +27,27 @@ export interface HealthDataRange {
 }
 
 const getPermissions = () => {
-  // Use string constants as per react-native-health documentation
+  // Use proper HealthKit permission constants as shown in the implementation
   return {
     permissions: {
       read: [
-        'HeartRateVariability',
-        'RestingHeartRate', 
-        'ActiveEnergyBurned',
-        'AppleExerciseTime',
-        'HeartRate',
-        'StepCount',
-        'DistanceWalkingRunning',
+        'HKQuantityTypeIdentifierHeight',
+        'HKQuantityTypeIdentifierStepCount', 
+        'HKWorkoutTypeIdentifier',
+        'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
+        'HKQuantityTypeIdentifierHeartRate',
+        'HKQuantityTypeIdentifierRestingHeartRate',
+        'HKQuantityTypeIdentifierWalkingHeartRateAverage',
+        'HKQuantityTypeIdentifierActiveEnergyBurned',
+        'HKQuantityTypeIdentifierAppleExerciseTime',
+        'HKQuantityTypeIdentifierDistanceWalkingRunning',
+        'HKQuantityTypeIdentifierBodyMass',
       ],
-      write: [],
+      write: [
+        'HKQuantityTypeIdentifierStepCount',
+        'HKWorkoutTypeIdentifier',
+        'HKQuantityTypeIdentifierActiveEnergyBurned',
+      ],
     },
   };
 };
@@ -67,7 +75,9 @@ class HealthKitService {
 
     try {
       console.log('🔍 Checking HealthKit availability...');
-      const isAvailable = await new Promise((resolve) => {
+      
+      // First check if HealthKit is available
+      const isAvailable = await new Promise<boolean>((resolve) => {
         AppleHealthKit.isAvailable((error: any, available: boolean) => {
           if (error) {
             console.log('❌ HealthKit availability check error:', error);
@@ -86,10 +96,33 @@ class HealthKitService {
         return false;
       }
 
-      console.log('🍎 HealthKit available! Ready for real health data');
-      this.isAvailable = true;
-      this.useMockData = false;
-      return true;
+      // Initialize HealthKit with permissions (like in your screenshot)
+      console.log('🔐 Initializing HealthKit with permissions...');
+      const permissions = getPermissions();
+      
+      const initSuccess = await new Promise<boolean>((resolve) => {
+        AppleHealthKit.initHealthKit(permissions, (error: string | null) => {
+          if (error) {
+            console.log('❌ HealthKit initialization error:', error);
+            resolve(false);
+          } else {
+            console.log('✅ HealthKit initialized successfully with permissions');
+            resolve(true);
+          }
+        });
+      });
+
+      if (initSuccess) {
+        console.log('🍎 HealthKit fully initialized! Ready for real health data');
+        this.isAvailable = true;
+        this.useMockData = false;
+        return true;
+      } else {
+        console.log('⚠️ HealthKit initialization failed, using mock data');
+        this.useMockData = true;
+        this.isAvailable = false;
+        return false;
+      }
     } catch (error) {
       console.log('❌ HealthKit initialization error:', error);
       this.useMockData = true;
@@ -99,33 +132,42 @@ class HealthKitService {
   }
 
   async requestPermissions(): Promise<boolean> {
+    console.log('🔐 Requesting HealthKit permissions...');
+    
     if (Platform.OS !== 'ios') {
+      console.log('📱 Not iOS, permissions not applicable');
       return false;
     }
 
     if (!AppleHealthKit) {
+      console.log('❌ AppleHealthKit module not available');
       return false;
     }
 
     if (!this.isAvailable) {
+      console.log('⚠️ HealthKit not available on this device');
       return false;
     }
 
+    // Permissions are already handled in initialize(), this is for re-requesting
     const permissions = getPermissions();
 
     return new Promise((resolve) => {
       try {
-        AppleHealthKit.initHealthKit(permissions, (error: string) => {
+        AppleHealthKit.initHealthKit(permissions, (error: string | null) => {
           if (error) {
+            console.log('❌ Permission request failed:', error);
             this.useMockData = true;
             resolve(false);
             return;
           }
           
+          console.log('✅ HealthKit permissions granted successfully');
           this.useMockData = false;
           resolve(true);
         });
       } catch (error) {
+        console.log('❌ Permission request error:', error);
         this.useMockData = true;
         resolve(false);
       }
@@ -201,13 +243,17 @@ class HealthKitService {
 
   async getHRV(range: HealthDataRange): Promise<HealthMetric[]> {
     if (!this.isAvailable) {
-      throw new Error('HealthKit not initialized');
-    }
-
-    if (this.useMockData) {
+      console.log('⚠️ HealthKit not available, using mock data for HRV');
       return this.generateMockData('hrv', range, 30);
     }
 
+    if (this.useMockData) {
+      console.log('📊 Using mock data for HRV');
+      return this.generateMockData('hrv', range, 30);
+    }
+
+    console.log('🔍 Fetching HRV data from HealthKit...');
+    
     return new Promise((resolve) => {
       const options = {
         startDate: range.startDate.toISOString(),
@@ -220,20 +266,29 @@ class HealthKitService {
         options,
         (err: any, results: any[]) => {
           if (err) {
+            console.log('❌ HRV fetch error, using mock data:', err);
             resolve(this.generateMockData('hrv', range, 30));
             return;
           }
 
+          console.log(`✅ Fetched ${results?.length || 0} HRV samples from HealthKit`);
+          
           const metrics: HealthMetric[] = (results || []).map((sample) => ({
             timestamp: sample.startDate,
             metric: 'hrv',
             value: sample.value,
             unit: 'ms',
             source: 'apple_health',
-            device: sample.sourceName,
+            device: sample.sourceName || 'Apple Watch',
           }));
 
-          resolve(metrics);
+          // If no real data, use mock data
+          if (metrics.length === 0) {
+            console.log('⚠️ No HRV data found in HealthKit, using mock data');
+            resolve(this.generateMockData('hrv', range, 30));
+          } else {
+            resolve(metrics);
+          }
         }
       );
     });

@@ -12,7 +12,7 @@ import {
   Linking,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import * as WebBrowser from 'expo-web-browser';
+// Removed expo-web-browser import to avoid native module issues
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import HealthKitService, { HealthDataRange, HealthMetric } from '../services/healthKit';
 import WalrusService, { WalrusBlob } from '../services/walrus';
@@ -94,18 +94,26 @@ interface UploadStatus {
   error?: string;
 }
 
-// Robust URL opening function with fallbacks
+// Simplified URL opening function using only React Native Linking
 async function openExternal(url: string, fallbackUrl?: string): Promise<void> {
   try {
     const safe = encodeURI(url);
-    const supported = await Linking.canOpenURL(safe);
     
+    console.log('');
+    console.log('🌐 ================ OPENING EXPLORER ================');
+    console.log(`🔗 Primary URL: ${safe}`);
+    if (fallbackUrl) {
+      console.log(`🔄 Fallback URL: ${fallbackUrl}`);
+    }
+    console.log('===============================================');
+    console.log('');
+    
+    const supported = await Linking.canOpenURL(safe);
     if (supported) {
-      console.log('🔗 Opening external URL with Linking:', safe);
       await Linking.openURL(safe);
+      console.log('✅ Successfully opened Flow explorer in browser');
     } else {
-      console.log('🌐 Linking not supported, using WebBrowser:', safe);
-      await WebBrowser.openBrowserAsync(safe);
+      throw new Error('URL scheme not supported');
     }
   } catch (error) {
     console.error('❌ Failed to open URL:', url, error);
@@ -128,7 +136,6 @@ async function openExternal(url: string, fallbackUrl?: string): Promise<void> {
           text: 'Copy URL', 
           onPress: () => {
             console.log('📋 URL to copy:', url);
-            // Could add clipboard functionality here
           }
         },
         { text: 'OK', style: 'default' }
@@ -658,8 +665,22 @@ export default function HomeScreen() {
       setFlowTransactions(updatedTransactions);
       await saveFlowTransactions(updatedTransactions);
       
-      // Log transaction details
+      // Log transaction details with prominent explorer links
       FlowBlockchainService.logTransactionDetails(transaction);
+      
+      // Additional prominent logging for UI
+      const explorerUrl = FlowBlockchainService.getTestnetExplorerUrl(transaction.transactionId);
+      const fallbackUrl = FlowBlockchainService.getTestnetExplorerFallbackUrl(transaction.transactionId);
+      
+      console.log('');
+      console.log('🎉 ================ NFT MINTED SUCCESSFULLY ================');
+      console.log(`💎 NFT Name: ${nftName}`);
+      console.log(`🆔 Transaction ID: ${transaction.transactionId}`);
+      console.log(`🔗 View on Explorer: ${explorerUrl}`);
+      console.log(`🔄 Fallback Explorer: ${fallbackUrl}`);
+      console.log(`⏰ Timestamp: ${transaction.timestamp}`);
+      console.log('========================================================');
+      console.log('');
       
       Alert.alert(
         'NFT Minted Successfully! 🎉',

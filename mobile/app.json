@@ -14,7 +14,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.mobile"
+      "bundleIdentifier": "com.wellrus.health",
+      "deploymentTarget": "15.1"
     },
     "android": {
       "adaptiveIcon": {

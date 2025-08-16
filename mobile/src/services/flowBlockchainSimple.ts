@@ -69,6 +69,19 @@ class SimpleFlowBlockchainService {
     };
 
     console.log('✅ Mock transaction completed:', mockTransaction);
+    
+    // Log explorer links prominently
+    const explorerUrl = this.getTestnetExplorerUrl(mockTransaction.transactionId);
+    const fallbackUrl = this.getTestnetExplorerFallbackUrl(mockTransaction.transactionId);
+    
+    console.log('');
+    console.log('🔗 ================ EXPLORER LINKS ================');
+    console.log(`🌊 PRIMARY EXPLORER: ${explorerUrl}`);
+    console.log(`🔄 FALLBACK EXPLORER: ${fallbackUrl}`);
+    console.log(`📱 Transaction Type: ${this.isEVMTransaction(mockTransaction.transactionId) ? 'EVM' : 'Cadence'}`);
+    console.log('================================================');
+    console.log('');
+    
     return mockTransaction;
   }
 
