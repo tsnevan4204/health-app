@@ -9,7 +9,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import flowBlockchainService from '../services/flowBlockchainHTTP';
+import HederaBlockchainService from '../services/hederaBlockchain';
 import HealthNFTService, { HealthBountyNFT } from '../services/healthNFTService';
 
 export default function SellScreen() {
@@ -18,34 +18,9 @@ export default function SellScreen() {
 
   const [healthBounties, setHealthBounties] = useState<HealthBountyNFT[]>([]);
   const [loading, setLoading] = useState(false);
-  const [testnetStatus, setTestnetStatus] = useState<{
-    isConnected: boolean;
-    blockHeight: number | null;
-    balance: number;
-  } | null>(null);
   
-  // Check testnet status and load health bounties on component mount
+  // Load health bounties on component mount
   React.useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        const status = await flowBlockchainService.checkTestnetStatus();
-        setTestnetStatus(status);
-        
-        if (!status.isConnected) {
-          console.warn('⚠️ Flow testnet connection issues detected');
-        }
-        
-        if (status.balance === 0) {
-          console.warn('⚠️ Service account has 0 FLOW balance');
-          console.log('💡 Visit https://testnet-faucet.onflow.org/ to fund the account');
-        }
-      } catch (error) {
-        console.error('❌ Failed to check testnet status:', error);
-        setTestnetStatus({ isConnected: false, blockHeight: null, balance: 0 });
-      }
-    };
-    
-    // Load health bounties
     const loadBounties = () => {
       try {
         const bounties = HealthNFTService.getPredefinedHealthBounties();
@@ -56,7 +31,6 @@ export default function SellScreen() {
       }
     };
     
-    checkStatus();
     loadBounties();
   }, []);
 
@@ -74,36 +48,46 @@ export default function SellScreen() {
 
 
 
-  const viewMarketplace = () => {
-    Alert.alert(
-      'Flow Marketplace',
-      'Your data packages are now live on the Flow blockchain marketplace! \n\n🌊 Flow Features:\n• Fast, low-cost transactions\n• Developer-friendly smart contracts\n• Sustainable proof-of-stake consensus\n• Built for mainstream adoption\n\nVisit flow.com to explore the ecosystem and track your NFT sales.',
-      [{ text: 'Got it', style: 'default' }]
-    );
-  };
 
   const submitToBounty = async (bounty: HealthBountyNFT) => {
     Alert.alert(
-      'Submit Health Data',
-      `Submit your anonymized health data to: "${bounty.title}"\n\nRequired metrics: ${bounty.requiredMetrics.join(', ')}\nReward: ${bounty.rewardAmount} FLOW\n\nThis will:\n• Upload your anonymized health data to Walrus\n• Remove all personal information\n• Create encrypted data stream\n• Submit to research bounty`,
+      bounty.title,
+      `${bounty.description}\n\nRequired metrics: ${bounty.requiredMetrics.join(', ')}\nReward: $${bounty.rewardAmount} USD\nDeadline: ${bounty.deadline.toLocaleDateString()}\nParticipants: ${bounty.participants}\n\nSubmitting will:\n• Encrypt your health data\n• Remove all personal information\n• Upload to secure storage\n• Receive payment upon acceptance`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Submit Data',
-          onPress: () => {
-            Alert.alert(
-              'Data Submitted! 🎯',
-              `Your anonymized health data has been submitted to the research bounty!\n\n📊 Metrics: ${bounty.requiredMetrics.join(', ')}\n💰 Reward: ${bounty.rewardAmount} FLOW\n🔒 Privacy: Fully anonymized\n\nResearchers will review your submission and rewards will be distributed upon acceptance.\n\nGo to the Home tab to upload your health data as an encrypted stream to Walrus.`
-            );
+          onPress: async () => {
+            try {
+              setLoading(true);
+              
+              // Initialize Hedera service
+              await HederaBlockchainService.initialize();
+              
+              // Simulate submission to research study
+              
+              Alert.alert(
+                'Data Submitted Successfully! ✅',
+                `Your health data has been submitted to the research study.\n\n` +
+                `Study: ${bounty.title}\n` +
+                `Reward: $${bounty.rewardAmount} USD\n` +
+                `Status: Under Review\n\n` +
+                `You will receive payment once the data is accepted by the research team.`,
+                [
+                  { text: 'OK', style: 'default' }
+                ]
+              );
+            } catch (error) {
+              console.error('Error submitting to bounty:', error);
+              Alert.alert('Error', 'Failed to submit data to bounty');
+            } finally {
+              setLoading(false);
+            }
           }
         }
       ]
     );
   };
-
-
-
-
 
   const BountyCard = ({ bounty }: { bounty: HealthBountyNFT }) => (
     <View style={[styles.packageCard, styles.bountyCard]}>
@@ -115,8 +99,8 @@ export default function SellScreen() {
           </View>
         </View>
         <View style={styles.priceContainer}>
-          <Text style={styles.price}>{bounty.rewardAmount}</Text>
-          <Text style={styles.currency}>{bounty.currency}</Text>
+          <Text style={styles.price}>${bounty.rewardAmount}</Text>
+          <Text style={styles.currency}>USD</Text>
         </View>
       </View>
       
@@ -141,7 +125,7 @@ export default function SellScreen() {
         <Text style={styles.metricsLabel}>Required Metrics:</Text>
         <View style={styles.metricsRow}>
           {bounty.requiredMetrics.map((metric, index) => (
-            <View key={index} style={styles.metricTag}>
+            <View key={`metric-${index}`} style={styles.metricTag}>
               <Text style={styles.metricText}>{metric}</Text>
             </View>
           ))}
@@ -159,52 +143,17 @@ export default function SellScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Health Research Marketplace</Text>
-          <Text style={styles.subtitle}>Earn rewards by contributing anonymized health data to research</Text>
+          <Text style={styles.title}>Health Research Bounties</Text>
+          <Text style={styles.subtitle}>Contribute anonymized health data to research studies</Text>
         </View>
-
-        {/* Flow Blockchain Info */}
-        <TouchableOpacity style={styles.flowCard} onPress={viewMarketplace}>
-          <View style={styles.flowHeader}>
-            <Text style={styles.flowTitle}>🌊 Flow Testnet</Text>
-            <Text style={styles.flowBadge}>Gasless Transactions</Text>
-          </View>
-          <Text style={styles.flowDescription}>
-            Fast, developer-friendly blockchain designed for mainstream adoption. 
-            Low fees, high throughput, and sustainable proof-of-stake consensus.
-          </Text>
-          
-          {/* Testnet Status */}
-          {testnetStatus && (
-            <View style={styles.testnetStatus}>
-              <Text style={styles.testnetStatusText}>
-                {testnetStatus.isConnected ? '✅' : '❌'} Connection: {testnetStatus.isConnected ? 'Active' : 'Failed'}
-              </Text>
-              {testnetStatus.blockHeight && (
-                <Text style={styles.testnetStatusText}>📦 Block: {testnetStatus.blockHeight}</Text>
-              )}
-              <Text style={styles.testnetStatusText}>
-                💰 Balance: {testnetStatus.balance.toFixed(2)} FLOW
-              </Text>
-              {testnetStatus.balance === 0 && (
-                <Text style={styles.warningText}>⚠️ Service account needs funding</Text>
-              )}
-            </View>
-          )}
-        </TouchableOpacity>
 
         {/* Health Bounties */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🎯 Health Research Bounties</Text>
-          <Text style={styles.sectionSubtitle}>Earn rewards by contributing your anonymized health data</Text>
           
           {healthBounties.map((bounty) => (
             <BountyCard key={bounty.id} bounty={bounty} />
           ))}
         </View>
-
-
-
 
 
         {loading && (
@@ -238,59 +187,6 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#666',
-  },
-  flowCard: {
-    backgroundColor: '#00D4AA',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  flowHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  flowTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  flowBadge: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  flowDescription: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  testnetStatus: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 8,
-  },
-  testnetStatusText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.9)',
-    marginBottom: 4,
-  },
-  warningText: {
-    fontSize: 12,
-    color: '#ffeb3b',
-    fontWeight: 'bold',
-    marginTop: 4,
   },
   section: {
     marginBottom: 32,
@@ -359,7 +255,7 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#00D4AA',
+    color: '#7B61FF',
   },
   currency: {
     fontSize: 14,
