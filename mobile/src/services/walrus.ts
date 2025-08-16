@@ -94,9 +94,9 @@ class WalrusService {
     
     // Try multiple Walrus endpoints with improved error handling
     const endpoints = [
-      'https://publisher.walrus-testnet.walrus.space/v1/store', // Official endpoint
-      `${this.publisherURL}/v1/store`, // Configured endpoint
-      'https://walrus-testnet-publisher.nodeinfra.com/v1/store', // Alternative
+      'https://publisher.walrus-testnet.walrus.space/v1/blobs', // Official endpoint
+      `${this.publisherURL}/v1/blobs`, // Configured endpoint  
+      'https://walrus-testnet-publisher.nodeinfra.com/v1/blobs', // Alternative
     ];
 
     let lastError: any;
@@ -109,7 +109,7 @@ class WalrusService {
         
         // Test endpoint connectivity first
         try {
-          const healthCheck = await axios.get(endpoint.replace('/v1/store', '/health'), { timeout: 5000 });
+          const healthCheck = await axios.get(endpoint.replace('/v1/blobs', '/health'), { timeout: 5000 });
           console.log(`✅ Endpoint ${endpoint} is reachable`);
         } catch (healthError) {
           console.warn(`⚠️ Endpoint health check failed for ${endpoint}, but continuing...`);
@@ -332,6 +332,40 @@ class WalrusService {
     });
   }
 
+  private sanitizeSingleObject(data: any): any {
+    if (!data || typeof data !== 'object') {
+      return data;
+    }
+    
+    const sanitized = { ...data };
+    
+    // Remove any personal identifiers from the object
+    delete sanitized.userId;
+    delete sanitized.userName;
+    delete sanitized.deviceId;
+    delete sanitized.serialNumber;
+    delete sanitized.user_id;
+    delete sanitized.device_serial;
+    delete sanitized.patient_id;
+    
+    // Recursively sanitize nested objects
+    Object.keys(sanitized).forEach(key => {
+      if (typeof sanitized[key] === 'object' && sanitized[key] !== null) {
+        if (Array.isArray(sanitized[key])) {
+          // Sanitize array of objects
+          sanitized[key] = sanitized[key].map((item: any) => 
+            typeof item === 'object' ? this.sanitizeSingleObject(item) : item
+          );
+        } else {
+          // Sanitize nested object
+          sanitized[key] = this.sanitizeSingleObject(sanitized[key]);
+        }
+      }
+    });
+    
+    return sanitized;
+  }
+
   async uploadHealthData(
     healthData: any,
     metadata: {
@@ -341,18 +375,30 @@ class WalrusService {
       samples: number;
     }
   ): Promise<WalrusBlob> {
-    // Sanitize health data to remove personal identifiers
-    const sanitizedData = this.sanitizeHealthData(healthData);
+    let sanitizedData: any;
     
-    // Format data as JSONL
-    const jsonlData = sanitizedData
-      .map((item: any) => JSON.stringify(item))
-      .join('\n');
-
-    // Upload encrypted blob
-    const blob = await this.uploadBlob(jsonlData, true);
-
-    return blob;
+    // Handle both arrays and objects
+    if (Array.isArray(healthData)) {
+      // Sanitize health data array to remove personal identifiers
+      sanitizedData = this.sanitizeHealthData(healthData);
+      
+      // Format data as JSONL
+      const jsonlData = sanitizedData
+        .map((item: any) => JSON.stringify(item))
+        .join('\n');
+      
+      // Upload encrypted blob
+      return await this.uploadBlob(jsonlData, true);
+    } else {
+      // Handle single object (like biological age analysis)
+      sanitizedData = this.sanitizeSingleObject(healthData);
+      
+      // Format as single JSON object
+      const jsonData = JSON.stringify(sanitizedData);
+      
+      // Upload encrypted blob
+      return await this.uploadBlob(jsonData, true);
+    }
   }
 
   async createManifest(
