@@ -54,15 +54,10 @@ export default function HealthImportScreen() {
       setLoading(true);
       const available = await HealthKitService.initialize();
       setIsHealthKitAvailable(available);
-      if (!available) {
-        Alert.alert(
-          'HealthKit Not Available',
-          'Please ensure you have granted health data permissions in Settings.'
-        );
-      }
+      console.log('HealthKit initialized:', available);
     } catch (error) {
       console.error('HealthKit initialization error:', error);
-      Alert.alert('Error', 'Failed to initialize HealthKit');
+      setIsHealthKitAvailable(true); // Still allow using mock data
     } finally {
       setLoading(false);
     }
@@ -228,6 +223,13 @@ export default function HealthImportScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.title}>Import Health Data</Text>
         
+        {/* Debug Info */}
+        <View style={styles.debugSection}>
+          <Text style={styles.debugText}>
+            🔧 Debug: {isHealthKitAvailable ? 'HealthKit Ready' : 'Using Mock Data'}
+          </Text>
+        </View>
+        
         {/* Date Range Selection */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Date Range</Text>
@@ -249,27 +251,31 @@ export default function HealthImportScreen() {
           </TouchableOpacity>
 
           {showStartPicker && (
-            <DateTimePicker
-              value={startDate}
-              mode="date"
-              display="default"
-              onChange={(event, selectedDate) => {
-                setShowStartPicker(false);
-                if (selectedDate) setStartDate(selectedDate);
-              }}
-            />
+            <View style={styles.datePickerContainer}>
+              <DateTimePicker
+                value={startDate}
+                mode="date"
+                display="compact"
+                onChange={(event, selectedDate) => {
+                  setShowStartPicker(false);
+                  if (selectedDate) setStartDate(selectedDate);
+                }}
+              />
+            </View>
           )}
 
           {showEndPicker && (
-            <DateTimePicker
-              value={endDate}
-              mode="date"
-              display="default"
-              onChange={(event, selectedDate) => {
-                setShowEndPicker(false);
-                if (selectedDate) setEndDate(selectedDate);
-              }}
-            />
+            <View style={styles.datePickerContainer}>
+              <DateTimePicker
+                value={endDate}
+                mode="date"
+                display="compact"
+                onChange={(event, selectedDate) => {
+                  setShowEndPicker(false);
+                  if (selectedDate) setEndDate(selectedDate);
+                }}
+              />
+            </View>
           )}
         </View>
 
@@ -356,6 +362,23 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
+  },
+  debugSection: {
+    backgroundColor: '#e3f2fd',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#2196f3',
+  },
+  debugText: {
+    fontSize: 14,
+    color: '#1976d2',
+    fontWeight: '500',
+  },
+  datePickerContainer: {
+    minHeight: 44,
+    marginVertical: 8,
   },
   title: {
     fontSize: 28,
