@@ -90,7 +90,10 @@ export default function HomeScreen() {
   const [biologicalAge, setBiologicalAge] = useState<BiologicalAgeData | null>(null);
   const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
 
-  // Remove automatic HealthKit initialization at app startup to prevent XPC errors
+  // Initialize HealthKit when component mounts
+  useEffect(() => {
+    initializeHealthKit();
+  }, []);
 
   const initializeHealthKit = async () => {
     try {
@@ -480,9 +483,9 @@ export default function HomeScreen() {
             }
           </Text>
           <Text style={styles.connectionSubtext}>
-            {!HealthKitService.isUsingMockData() 
-              ? '✅ Real health data access granted' 
-              : '📱 Use "Generate Fake Data" for testing or "Connect to Apple Health" for real data'
+{!HealthKitService.isUsingMockData() 
+              ? '🍎 Connected to Apple Health - real data available' 
+              : '📱 Demo mode - tap "Connect to Apple Health" for real data or "Generate Fake Data" for testing'
             }
           </Text>
           {healthData && (
@@ -591,7 +594,7 @@ export default function HomeScreen() {
               <ActivityIndicator color="white" />
             ) : (
               <Text style={styles.buttonText}>
-                {HealthKitService.isUsingMockData() ? 'Connect to Apple Health' : 'Fetch Health Data'}
+{HealthKitService.isUsingMockData() ? '🍎 Connect to Apple Health' : '📊 Fetch Real Health Data'}
               </Text>
             )}
           </TouchableOpacity>

@@ -47,39 +47,49 @@ class HealthKitService {
   private useMockData: boolean = false;
 
   async initialize(): Promise<boolean> {
+    console.log('🔄 HealthKit initializing...');
+    
     if (Platform.OS !== 'ios') {
+      console.log('📱 Not iOS platform, using mock data');
       this.useMockData = true;
       this.isAvailable = true;
       return true;
     }
 
     if (!AppleHealthKit) {
+      console.log('❌ AppleHealthKit module not available, using mock data');
       this.useMockData = true;
       this.isAvailable = false;
       return false;
     }
 
     try {
+      console.log('🔍 Checking HealthKit availability...');
       const isAvailable = await new Promise((resolve) => {
         AppleHealthKit.isAvailable((error: any, available: boolean) => {
           if (error) {
+            console.log('❌ HealthKit availability check error:', error);
             resolve(false);
           } else {
+            console.log('✅ HealthKit availability:', available);
             resolve(available);
           }
         });
       });
 
       if (!isAvailable) {
+        console.log('⚠️ HealthKit not available on this device (likely simulator), using mock data');
         this.useMockData = true;
         this.isAvailable = false;
         return false;
       }
 
+      console.log('🍎 HealthKit available! Ready for real health data');
       this.isAvailable = true;
       this.useMockData = false;
       return true;
     } catch (error) {
+      console.log('❌ HealthKit initialization error:', error);
       this.useMockData = true;
       this.isAvailable = false;
       return false;
@@ -125,7 +135,16 @@ class HealthKitService {
   }
 
   getDataSource(): string {
-    return this.useMockData ? 'Mock Data (for demo)' : 'Apple Health';
+    if (Platform.OS !== 'ios') {
+      return 'Mock Data (Non-iOS Device)';
+    }
+    if (!AppleHealthKit) {
+      return 'Mock Data (HealthKit Module Missing)';
+    }
+    if (!this.isAvailable) {
+      return 'Mock Data (HealthKit Unavailable - Likely Simulator)';
+    }
+    return this.useMockData ? 'Mock Data (Demo Mode)' : 'Apple Health';
   }
 
   generateMockData(metric: string, range: HealthDataRange, count: number): HealthMetric[] {
