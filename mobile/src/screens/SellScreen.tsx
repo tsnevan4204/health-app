@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import flowBlockchainService, { FlowTransaction } from '../services/flowBlockchainHTTP';
+import HealthNFTService, { HealthBountyNFT, HealthDataBundleNFT } from '../services/healthNFTService';
 
 interface DataPackage {
   id: string;
@@ -72,6 +73,7 @@ export default function SellScreen() {
   ]);
 
   const [listedPackages, setListedPackages] = useState<ListedPackage[]>([]);
+  const [healthBounties, setHealthBounties] = useState<HealthBountyNFT[]>([]);
   const [loading, setLoading] = useState(false);
   const [testnetStatus, setTestnetStatus] = useState<{
     isConnected: boolean;
@@ -79,7 +81,7 @@ export default function SellScreen() {
     balance: number;
   } | null>(null);
   
-  // Check testnet status on component mount
+  // Check testnet status and load health bounties on component mount
   React.useEffect(() => {
     const checkStatus = async () => {
       try {
@@ -100,7 +102,19 @@ export default function SellScreen() {
       }
     };
     
+    // Load health bounties
+    const loadBounties = () => {
+      try {
+        const bounties = HealthNFTService.getPredefinedHealthBounties();
+        setHealthBounties(bounties);
+        console.log(`📋 Loaded ${bounties.length} health bounties`);
+      } catch (error) {
+        console.error('❌ Failed to load health bounties:', error);
+      }
+    };
+    
     checkStatus();
+    loadBounties();
   }, []);
 
   const getRarityColor = (rarity: string) => {
@@ -113,24 +127,27 @@ export default function SellScreen() {
     }
   };
 
-  const mintFlowNFT = async (packageData: DataPackage): Promise<FlowTransaction> => {
-    console.log('🌊 Starting real Flow NFT minting...');
+  const mintHealthDataBundleNFT = async (packageData: DataPackage): Promise<HealthDataBundleNFT> => {
+    console.log('🌊 Starting Health Data Bundle NFT creation...');
     
-    const dataHash = flowBlockchainService.generateDataHash({
-      metrics: packageData.metrics,
-      duration: packageData.duration,
-      samples: packageData.samples,
-      category: packageData.category
-    });
+    // Simulate anonymized health data for this package
+    const mockHealthData = {
+      [packageData.metrics[0]]: Array.from({ length: packageData.samples }, (_, i) => ({
+        timestamp: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString(),
+        metric: packageData.metrics[0],
+        value: Math.random() * 100,
+        unit: 'units',
+        source: 'health_app',
+        device: 'smartwatch'
+      }))
+    };
 
-    return await flowBlockchainService.mintHealthDataNFT(
-      packageData.title,
-      packageData.description,
-      dataHash,
-      packageData.metrics,
-      packageData.rarity,
-      packageData.price
-    );
+    return await HealthNFTService.createHealthDataBundleNFT(mockHealthData, {
+      title: packageData.title,
+      description: packageData.description,
+      category: packageData.category,
+      customPrice: packageData.price
+    });
   };
 
   const listDataPackage = async (dataPackage: DataPackage) => {
@@ -146,42 +163,47 @@ export default function SellScreen() {
             text: 'List for Sale',
             onPress: async () => {
               try {
-                console.log('🚀 Initiating real Flow transaction...');
+                console.log('🚀 Creating Health Data Bundle NFT with anonymization...');
                 
-                // Execute real Flow blockchain transaction
-                const flowTransaction = await mintFlowNFT(dataPackage);
+                // Create Health Data Bundle NFT with anonymization
+                const bundleNFT = await mintHealthDataBundleNFT(dataPackage);
                 
                 const listedPackage: ListedPackage = {
                   ...dataPackage,
-                  status: flowTransaction.status === 'sealed' ? 'active' : 'pending',
+                  status: bundleNFT.status === 'listed' ? 'active' : 'pending',
                   views: 0,
                   listedAt: new Date(),
-                  transactionId: flowTransaction.transactionId,
+                  transactionId: bundleNFT.transactionId,
                 };
 
                 setListedPackages(prev => [...prev, listedPackage]);
                 setAvailablePackages(prev => prev.filter(p => p.id !== dataPackage.id));
 
-                const explorerUrl = flowBlockchainService.getTestnetExplorerUrl(flowTransaction.transactionId);
+                const explorerUrl = bundleNFT.transactionId ? 
+                  flowBlockchainService.getTestnetExplorerUrl(bundleNFT.transactionId) : '';
+                const walruscanUrl = bundleNFT.walrusManifestId ? 
+                  `https://walruscan.com/testnet/blob/${bundleNFT.walrusManifestId}` : '';
                 
-                // Log detailed transaction information
-                flowBlockchainService.logTransactionDetails(flowTransaction);
-                
-                // Show success/pending alert with comprehensive details
-                const isSealed = flowTransaction.status === 'sealed';
-                const statusEmoji = isSealed ? '🎉' : '⏳';
-                const statusText = isSealed ? 'Successfully Minted!' : 'Transaction Submitted!';
-                const actionText = isSealed ? 'minted' : 'submitted';
+                // Show success alert with comprehensive details
+                const statusEmoji = '🎉';
+                const statusText = 'NFT Created Successfully!';
                 
                 Alert.alert(
                   `${statusText} ${statusEmoji}`,
-                  `Your health data NFT has been ${actionText} on Flow testnet.\n\n🆔 Transaction: ${flowTransaction.transactionId}\n🏗️ Block: ${flowTransaction.blockHeight || 'Pending'}\n⛽ Gas: ${flowTransaction.gasUsed || 0} FLOW (Gasless!)\n📋 Events: ${flowTransaction.events.length}\n\n🔗 View on Flowscan`,
+                  `Your anonymized health data bundle NFT has been created!\n\n📦 Bundle ID: ${bundleNFT.id}\n💎 Rarity: ${bundleNFT.rarity}\n📊 Metrics: ${bundleNFT.metrics.length}\n📈 Samples: ${bundleNFT.samplesCount}\n💰 Price: ${bundleNFT.price} FLOW\n🔒 Privacy: ${bundleNFT.anonymizationLevel}\n\n🌊 Flow TX: ${bundleNFT.transactionId}\n🐋 Walrus: ${bundleNFT.walrusManifestId}`,
                   [
                     { 
-                      text: 'View Explorer', 
+                      text: 'View Walruscan', 
                       onPress: () => {
-                        console.log('🔗 Opening Flow testnet explorer:', explorerUrl);
+                        console.log('🔗 Opening Walruscan:', walruscanUrl);
                         // In a real app, you would open the URL in a browser
+                        // Linking.openURL(walruscanUrl);
+                      }
+                    },
+                    { 
+                      text: 'View Flow Explorer', 
+                      onPress: () => {
+                        console.log('🔗 Opening Flow explorer:', explorerUrl);
                         // Linking.openURL(explorerUrl);
                       }
                     },
@@ -297,6 +319,55 @@ export default function SellScreen() {
     </View>
   );
 
+  const BountyCard = ({ bounty }: { bounty: HealthBountyNFT }) => (
+    <View style={[styles.packageCard, styles.bountyCard]}>
+      <View style={styles.packageHeader}>
+        <View style={styles.packageInfo}>
+          <Text style={styles.packageTitle}>{bounty.title}</Text>
+          <View style={[styles.rarityBadge, { backgroundColor: getRarityColor(bounty.rarity) }]}>
+            <Text style={styles.rarityText}>{bounty.rarity}</Text>
+          </View>
+        </View>
+        <View style={styles.priceContainer}>
+          <Text style={styles.price}>{bounty.rewardAmount}</Text>
+          <Text style={styles.currency}>{bounty.currency}</Text>
+        </View>
+      </View>
+      
+      <Text style={styles.packageDescription}>{bounty.description}</Text>
+      
+      <View style={styles.bountyStats}>
+        <View style={styles.stat}>
+          <Text style={styles.statLabel}>Participants</Text>
+          <Text style={styles.statValue}>{bounty.participants}</Text>
+        </View>
+        <View style={styles.stat}>
+          <Text style={styles.statLabel}>Deadline</Text>
+          <Text style={styles.statValue}>{bounty.deadline.toLocaleDateString()}</Text>
+        </View>
+        <View style={styles.stat}>
+          <Text style={styles.statLabel}>Category</Text>
+          <Text style={styles.statValue}>{bounty.category}</Text>
+        </View>
+      </View>
+
+      <View style={styles.metricsContainer}>
+        <Text style={styles.metricsLabel}>Required Metrics:</Text>
+        <View style={styles.metricsRow}>
+          {bounty.requiredMetrics.map((metric, index) => (
+            <View key={index} style={styles.metricTag}>
+              <Text style={styles.metricText}>{metric}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <TouchableOpacity style={styles.submitButton}>
+        <Text style={styles.submitButtonText}>🎯 Submit Data</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -336,9 +407,19 @@ export default function SellScreen() {
           )}
         </TouchableOpacity>
 
+        {/* Health Bounties */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🎯 Health Research Bounties</Text>
+          <Text style={styles.sectionSubtitle}>Earn rewards by contributing your anonymized health data</Text>
+          
+          {healthBounties.map((bounty) => (
+            <BountyCard key={bounty.id} bounty={bounty} />
+          ))}
+        </View>
+
         {/* Available Packages */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Available Data Packages</Text>
+          <Text style={styles.sectionTitle}>📦 Available Data Packages</Text>
           <Text style={styles.sectionSubtitle}>Create NFTs from your health data</Text>
           
           {availablePackages.map((pkg) => (
@@ -482,6 +563,11 @@ const styles = StyleSheet.create({
   listedCard: {
     borderLeftWidth: 4,
     borderLeftColor: '#00D4AA',
+  },
+  bountyCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#ff6b35',
+    backgroundColor: '#fff9f5',
   },
   packageHeader: {
     flexDirection: 'row',
@@ -646,5 +732,24 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 16,
     color: '#666',
+  },
+  bountyStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff5f0',
+    borderRadius: 8,
+  },
+  submitButton: {
+    backgroundColor: '#ff6b35',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  submitButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

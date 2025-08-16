@@ -18,6 +18,7 @@ import HealthKitService, { HealthDataRange, HealthMetric } from '../services/hea
 import WalrusService, { WalrusBlob } from '../services/walrus';
 import BiologicalAgeService, { BiologicalAgeData } from '../services/biologicalAge';
 import FlowBlockchainService, { FlowTransaction } from '../services/flowBlockchainSimple';
+import HealthNFTService from '../services/healthNFTService';
 
 // Storage keys for persistence
 const STORAGE_KEYS = {
@@ -608,10 +609,27 @@ export default function HomeScreen() {
         });
         updateUploadStatuses([...statuses]);
 
-        Alert.alert(
-          'Upload Complete! 🎉',
-          `Successfully uploaded ${blobs.size} metrics to Walrus!\n\nManifest ID: ${manifestBlob.id}\n\nAll data has been encrypted and stored securely. Check the console for detailed upload logs.`
-        );
+        // Also create Health Data Bundle NFT
+        try {
+          console.log('🎨 Creating Health Data Bundle NFT...');
+          
+          const bundleNFT = await HealthNFTService.createHealthDataBundleNFT(healthData, {
+            title: `Health Data Bundle - ${new Date().toLocaleDateString()}`,
+            description: `Anonymized health metrics bundle containing data from ${metrics.length} different health metrics`,
+            category: 'Personal Health Data'
+          });
+          
+          Alert.alert(
+            'Upload & NFT Complete! 🎉',
+            `Successfully uploaded ${blobs.size} metrics to Walrus and created NFT!\n\n📦 Bundle NFT ID: ${bundleNFT.id}\n💎 Rarity: ${bundleNFT.rarity}\n💰 Price: ${bundleNFT.price} FLOW\n🔒 Privacy: Fully anonymized\n\n🐋 Walrus Manifest: ${manifestBlob.id}\n🌊 Flow Transaction: ${bundleNFT.transactionId}\n\nAll personal information has been removed and data is encrypted.`
+          );
+        } catch (nftError) {
+          console.error('NFT creation failed:', nftError);
+          Alert.alert(
+            'Upload Complete! 🎉',
+            `Successfully uploaded ${blobs.size} metrics to Walrus!\n\nManifest ID: ${manifestBlob.id}\n\nAll data has been encrypted and stored securely. NFT creation failed but data is safely stored.`
+          );
+        }
       }
     } catch (error) {
       console.error('Upload error:', error);
