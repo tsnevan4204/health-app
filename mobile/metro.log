@@ -1,0 +1,6 @@
+env: load .env
+env: export FLOW_ADDRESS
+Starting project at /Users/ellis.osborn/health-app/mobile
+Starting Metro Bundler
+Waiting on http://localhost:8081
+Logs for your project will appear below.

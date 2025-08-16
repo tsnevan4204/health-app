@@ -11,9 +11,18 @@ import {
   Platform,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import HealthKitService, { HealthDataRange, HealthMetric } from '../services/healthKit';
 import WalrusService, { WalrusBlob } from '../services/walrus';
 import BiologicalAgeService, { BiologicalAgeData } from '../services/biologicalAge';
+
+// Storage keys for persistence
+const STORAGE_KEYS = {
+  HEALTH_DATA: '@wellrus_health_data',
+  BIOLOGICAL_AGE: '@wellrus_biological_age',
+  UPLOADED_DOCUMENTS: '@wellrus_uploaded_documents',
+  UPLOAD_STATUSES: '@wellrus_upload_statuses',
+};
 
 // Simple Chart Component
 interface SimpleChartProps {
@@ -90,10 +99,96 @@ export default function HomeScreen() {
   const [biologicalAge, setBiologicalAge] = useState<BiologicalAgeData | null>(null);
   const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
 
-  // Initialize HealthKit when component mounts
+  // Initialize app when component mounts
   useEffect(() => {
-    initializeHealthKit();
+    initializeApp();
   }, []);
+
+  const initializeApp = async () => {
+    await loadPersistedData();
+    await initializeHealthKit();
+  };
+
+  const loadPersistedData = async () => {
+    try {
+      console.log('📱 [STORAGE] Loading persisted data...');
+      
+      // Load health data
+      const storedHealthData = await AsyncStorage.getItem(STORAGE_KEYS.HEALTH_DATA);
+      if (storedHealthData) {
+        const healthData = JSON.parse(storedHealthData);
+        setHealthData(healthData);
+        console.log('✅ [STORAGE] Loaded health data:', Object.keys(healthData));
+      }
+
+      // Load biological age
+      const storedBiologicalAge = await AsyncStorage.getItem(STORAGE_KEYS.BIOLOGICAL_AGE);
+      if (storedBiologicalAge) {
+        const biologicalAge = JSON.parse(storedBiologicalAge);
+        setBiologicalAge(biologicalAge);
+        console.log('✅ [STORAGE] Loaded biological age:', biologicalAge.biologicalAge);
+      }
+
+      // Load uploaded documents
+      const storedDocuments = await AsyncStorage.getItem(STORAGE_KEYS.UPLOADED_DOCUMENTS);
+      if (storedDocuments) {
+        const documents = JSON.parse(storedDocuments);
+        setUploadedDocuments(documents);
+        console.log('✅ [STORAGE] Loaded uploaded documents:', documents.length);
+      }
+
+      // Load upload statuses
+      const storedStatuses = await AsyncStorage.getItem(STORAGE_KEYS.UPLOAD_STATUSES);
+      if (storedStatuses) {
+        const statuses = JSON.parse(storedStatuses);
+        updateUploadStatuses(statuses);
+        console.log('✅ [STORAGE] Loaded upload statuses:', statuses.length);
+      }
+    } catch (error) {
+      console.error('❌ [STORAGE] Error loading persisted data:', error);
+    }
+  };
+
+  const saveHealthData = async (data: any) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.HEALTH_DATA, JSON.stringify(data));
+      console.log('💾 [STORAGE] Saved health data');
+    } catch (error) {
+      console.error('❌ [STORAGE] Error saving health data:', error);
+    }
+  };
+
+  const saveBiologicalAge = async (bioAge: BiologicalAgeData) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.BIOLOGICAL_AGE, JSON.stringify(bioAge));
+      console.log('💾 [STORAGE] Saved biological age');
+    } catch (error) {
+      console.error('❌ [STORAGE] Error saving biological age:', error);
+    }
+  };
+
+  const saveUploadedDocuments = async (documents: any[]) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.UPLOADED_DOCUMENTS, JSON.stringify(documents));
+      console.log('💾 [STORAGE] Saved uploaded documents');
+    } catch (error) {
+      console.error('❌ [STORAGE] Error saving uploaded documents:', error);
+    }
+  };
+
+  const saveUploadStatuses = async (statuses: UploadStatus[]) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.UPLOAD_STATUSES, JSON.stringify(statuses));
+      console.log('💾 [STORAGE] Saved upload statuses');
+    } catch (error) {
+      console.error('❌ [STORAGE] Error saving upload statuses:', error);
+    }
+  };
+
+  const updateUploadStatuses = (newStatuses: UploadStatus[]) => {
+    setUploadStatuses(newStatuses);
+    saveUploadStatuses(newStatuses);
+  };
 
   const initializeHealthKit = async () => {
     try {
@@ -174,13 +269,15 @@ export default function HomeScreen() {
       
       const data = { hrv, rhr, calories, exercise, weight };
       setHealthData(data);
+      await saveHealthData(data);
       
       // Calculate biological age
       const bioAge = BiologicalAgeService.calculateBiologicalAge(data);
       setBiologicalAge(bioAge);
+      await saveBiologicalAge(bioAge);
       
       Alert.alert(
-        'Fake Data Generated! 🎲',
+        'Mock Data Generated! 🎲',
         `Successfully generated 30 days of health data:\n` +
         `• HRV: ${data.hrv.length} samples\n` +
         `• RHR: ${data.rhr.length} samples\n` +
@@ -190,8 +287,8 @@ export default function HomeScreen() {
         `Ready to upload to Walrus!`
       );
     } catch (error) {
-      console.error('Error generating fake data:', error);
-      Alert.alert('Error', 'Failed to generate fake data');
+      console.error('Error generating mock data:', error);
+      Alert.alert('Error', 'Failed to generate mock data');
     } finally {
       setLoading(false);
     }
@@ -199,7 +296,7 @@ export default function HomeScreen() {
 
   const showBiologicalAgeInfo = () => {
     if (!biologicalAge) {
-      Alert.alert('Info', 'Generate health data first to calculate your biological age.');
+      Alert.alert('Info', 'Generate mock data first to calculate your biological age.');
       return;
     }
 
@@ -237,13 +334,19 @@ export default function HomeScreen() {
           true
         );
         
-        setUploadedDocuments(prev => [...prev, {
+        const newDocument = {
           name: document.name,
           size: document.size,
           type: document.mimeType,
           blobId: blob.id,
           uploadedAt: new Date().toISOString(),
-        }]);
+        };
+        
+        setUploadedDocuments(prev => {
+          const updatedDocs = [...prev, newDocument];
+          saveUploadedDocuments(updatedDocs);
+          return updatedDocs;
+        });
 
         Alert.alert(
           'Document Uploaded! 📄',
@@ -290,10 +393,12 @@ export default function HomeScreen() {
       
       const data = await HealthKitService.getAllHealthData(range);
       setHealthData(data);
+      await saveHealthData(data);
       
       // Calculate biological age
       const bioAge = BiologicalAgeService.calculateBiologicalAge(data);
       setBiologicalAge(bioAge);
+      await saveBiologicalAge(bioAge);
       
       const dataSource = HealthKitService.isUsingMockData() ? 'Demo' : 'Apple Health';
       Alert.alert(
@@ -332,7 +437,7 @@ export default function HomeScreen() {
       // Upload all metrics
       if (healthData.hrv.length > 0) {
         statuses.push({ metric: 'HRV', status: 'uploading' });
-        setUploadStatuses([...statuses]);
+        updateUploadStatuses([...statuses]);
         
         const blob = await WalrusService.uploadHealthData(healthData.hrv, {
           metric: 'hrv',
@@ -347,12 +452,12 @@ export default function HomeScreen() {
           status: 'success', 
           blobId: blob.id 
         };
-        setUploadStatuses([...statuses]);
+        updateUploadStatuses([...statuses]);
       }
 
       if (healthData.rhr.length > 0) {
         statuses.push({ metric: 'RHR', status: 'uploading' });
-        setUploadStatuses([...statuses]);
+        updateUploadStatuses([...statuses]);
         
         const blob = await WalrusService.uploadHealthData(healthData.rhr, {
           metric: 'rhr',
@@ -367,12 +472,12 @@ export default function HomeScreen() {
           status: 'success', 
           blobId: blob.id 
         };
-        setUploadStatuses([...statuses]);
+        updateUploadStatuses([...statuses]);
       }
 
       if (healthData.weight.length > 0) {
         statuses.push({ metric: 'Weight', status: 'uploading' });
-        setUploadStatuses([...statuses]);
+        updateUploadStatuses([...statuses]);
         
         const blob = await WalrusService.uploadHealthData(healthData.weight, {
           metric: 'weight',
@@ -387,12 +492,12 @@ export default function HomeScreen() {
           status: 'success', 
           blobId: blob.id 
         };
-        setUploadStatuses([...statuses]);
+        updateUploadStatuses([...statuses]);
       }
 
       if (healthData.exercise.length > 0) {
         statuses.push({ metric: 'Exercise', status: 'uploading' });
-        setUploadStatuses([...statuses]);
+        updateUploadStatuses([...statuses]);
         
         const blob = await WalrusService.uploadHealthData(healthData.exercise, {
           metric: 'exercise',
@@ -407,7 +512,7 @@ export default function HomeScreen() {
           status: 'success', 
           blobId: blob.id 
         };
-        setUploadStatuses([...statuses]);
+        updateUploadStatuses([...statuses]);
       }
 
       // Create and upload manifest
@@ -426,7 +531,7 @@ export default function HomeScreen() {
           status: 'success', 
           blobId: manifestBlob.id 
         });
-        setUploadStatuses([...statuses]);
+        updateUploadStatuses([...statuses]);
 
         Alert.alert(
           'Upload Complete! 🎉',
@@ -478,14 +583,14 @@ export default function HomeScreen() {
             {!HealthKitService.isUsingMockData() 
               ? '🟢 Connected to Apple Health - Real Data' 
               : isHealthKitAvailable 
-                ? '🟡 Apple Health Available - Demo Data' 
-                : '🔴 Apple Health Unavailable - Demo Data'
+                ? '🟡 Apple Health Available - Mock Data' 
+                : '🔴 Apple Health Unavailable - Mock Data'
             }
           </Text>
           <Text style={styles.connectionSubtext}>
 {!HealthKitService.isUsingMockData() 
               ? '🍎 Connected to Apple Health - real data available' 
-              : '📱 Demo mode - tap "Connect to Apple Health" for real data or "Generate Fake Data" for testing'
+              : '📱 Mock mode - tap "Generate Mock Data" for testing or "Fetch Real Health Data" to connect'
             }
           </Text>
           {healthData && (
@@ -556,19 +661,6 @@ export default function HomeScreen() {
 
         {/* Action Buttons */}
         <View style={styles.buttonContainer}>
-          {HealthKitService.isUsingMockData() && (
-            <TouchableOpacity
-              style={[styles.button, styles.connectButton]}
-              onPress={() => Alert.alert(
-                'Connect to Apple Health',
-                'To access real health data:\n\n1. Tap "Fetch Health Data" below\n2. Grant permissions when prompted\n3. Select which data to share\n\nThis will enable real-time access to your Apple Health data.',
-                [{ text: 'Got it', style: 'default' }]
-              )}
-            >
-              <Text style={styles.buttonText}>📱 How to Connect Apple Health</Text>
-            </TouchableOpacity>
-          )}
-
           <TouchableOpacity
             style={[styles.button, styles.fakeDataButton]}
             onPress={generateFakeData}
@@ -577,7 +669,7 @@ export default function HomeScreen() {
             {loading ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text style={styles.buttonText}>🎲 Generate Fake Data</Text>
+              <Text style={styles.buttonText}>🎲 Generate Mock Data</Text>
             )}
           </TouchableOpacity>
           
@@ -613,7 +705,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Document Upload Section */}
-        <View style={styles.section}>
+        <View style={[styles.section, styles.documentSection]}>
           <Text style={styles.sectionTitle}>Document Upload</Text>
           <Text style={styles.sectionSubtitle}>Upload medical documents (PDF, DOCX)</Text>
           
@@ -854,6 +946,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  documentSection: {
+    marginTop: 30,
   },
   sectionTitle: {
     fontSize: 18,
