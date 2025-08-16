@@ -363,8 +363,8 @@ export default function SellScreen() {
             <Text style={styles.sectionTitle}>Your Listed Packages</Text>
             <Text style={styles.sectionSubtitle}>Active on Flow marketplace</Text>
             
-            {listedPackages.map((pkg) => (
-              <ListedCard key={pkg.id} package={pkg} />
+            {listedPackages.map((pkg, index) => (
+              <ListedCard key={`${pkg.id}-${index}`} package={pkg} />
             ))}
           </View>
         )}
