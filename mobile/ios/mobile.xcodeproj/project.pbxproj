@@ -139,6 +139,7 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "mobile" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
+				A1B2C3D4E5F6789012345678 /* [Auto] Start Metro Bundler */,
 				5F89EA5D68EBA77B8AF33840 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
@@ -202,6 +203,25 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		A1B2C3D4E5F6789012345678 /* [Auto] Start Metro Bundler */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "[Auto] Start Metro Bundler";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Auto-start Metro bundler for Xcode builds\n# This allows running the app directly from Xcode without manually starting Metro\n\nset -e\n\n# Only run in Debug configuration\nif [[ \"$CONFIGURATION\" != *Debug* ]]; then\n  echo \"🚀 Skipping Metro auto-start for Release build\"\n  exit 0\nfi\n\n# Check if Metro is already running\nif pgrep -f \"expo start\" > /dev/null; then\n    echo \"📱 Metro bundler is already running\"\n    exit 0\nfi\n\n# Change to project root directory\ncd \"$SRCROOT/..\"\n\n# Start Metro bundler in background\necho \"🚀 Starting Metro bundler for Xcode build...\"\n\n# Kill any existing Metro processes first\npkill -f \"expo start\" || true\npkill -f \"metro\" || true\n\n# Start Metro bundler\nnohup npx expo start --dev-client --port 8081 > metro.log 2>&1 &\n\n# Wait for Metro to start\necho \"⏳ Waiting for Metro bundler to initialize...\"\nfor i in {1..15}; do\n    if curl -s http://localhost:8081/status > /dev/null 2>&1; then\n        echo \"✅ Metro bundler started successfully on port 8081\"\n        exit 0\n    fi\n    sleep 1\ndone\n\necho \"⚠️  Metro bundler may still be starting. Check metro.log if issues persist.\"\nexit 0\n";
+		};
 		00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
