@@ -9,12 +9,15 @@ import {
   Alert,
   SafeAreaView,
   Platform,
+  Linking,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import HealthKitService, { HealthDataRange, HealthMetric } from '../services/healthKit';
 import WalrusService, { WalrusBlob } from '../services/walrus';
 import BiologicalAgeService, { BiologicalAgeData } from '../services/biologicalAge';
+import FlowBlockchainService, { FlowTransaction } from '../services/flowBlockchainSimple';
 
 // Storage keys for persistence
 const STORAGE_KEYS = {
@@ -22,6 +25,7 @@ const STORAGE_KEYS = {
   BIOLOGICAL_AGE: '@wellrus_biological_age',
   UPLOADED_DOCUMENTS: '@wellrus_uploaded_documents',
   UPLOAD_STATUSES: '@wellrus_upload_statuses',
+  FLOW_TRANSACTIONS: '@wellrus_flow_transactions',
 };
 
 // Simple Chart Component
@@ -90,6 +94,49 @@ interface UploadStatus {
   error?: string;
 }
 
+// Robust URL opening function with fallbacks
+async function openExternal(url: string, fallbackUrl?: string): Promise<void> {
+  try {
+    const safe = encodeURI(url);
+    const supported = await Linking.canOpenURL(safe);
+    
+    if (supported) {
+      console.log('🔗 Opening external URL with Linking:', safe);
+      await Linking.openURL(safe);
+    } else {
+      console.log('🌐 Linking not supported, using WebBrowser:', safe);
+      await WebBrowser.openBrowserAsync(safe);
+    }
+  } catch (error) {
+    console.error('❌ Failed to open URL:', url, error);
+    
+    if (fallbackUrl && fallbackUrl !== url) {
+      console.log('🔄 Trying fallback URL:', fallbackUrl);
+      try {
+        await openExternal(fallbackUrl);
+        return;
+      } catch (fallbackError) {
+        console.error('❌ Fallback URL also failed:', fallbackError);
+      }
+    }
+    
+    Alert.alert(
+      'Could not open browser',
+      `Unable to open the Flow explorer. Please visit manually:\n\n${url}`,
+      [
+        { 
+          text: 'Copy URL', 
+          onPress: () => {
+            console.log('📋 URL to copy:', url);
+            // Could add clipboard functionality here
+          }
+        },
+        { text: 'OK', style: 'default' }
+      ]
+    );
+  }
+}
+
 export default function HomeScreen() {
   const [isHealthKitAvailable, setIsHealthKitAvailable] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -98,6 +145,10 @@ export default function HomeScreen() {
   const [healthData, setHealthData] = useState<any>(null);
   const [biologicalAge, setBiologicalAge] = useState<BiologicalAgeData | null>(null);
   const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
+  const [flowTransactions, setFlowTransactions] = useState<FlowTransaction[]>([]);
+  const [selectedTransaction, setSelectedTransaction] = useState<FlowTransaction | null>(null);
+  const [showTransactionDropdown, setShowTransactionDropdown] = useState(false);
+  const [mintingNFT, setMintingNFT] = useState(false);
 
   // Initialize app when component mounts
   useEffect(() => {
@@ -144,6 +195,14 @@ export default function HomeScreen() {
         updateUploadStatuses(statuses);
         console.log('✅ [STORAGE] Loaded upload statuses:', statuses.length);
       }
+
+      // Load flow transactions
+      const storedTransactions = await AsyncStorage.getItem(STORAGE_KEYS.FLOW_TRANSACTIONS);
+      if (storedTransactions) {
+        const transactions = JSON.parse(storedTransactions);
+        setFlowTransactions(transactions);
+        console.log('✅ [STORAGE] Loaded flow transactions:', transactions.length);
+      }
     } catch (error) {
       console.error('❌ [STORAGE] Error loading persisted data:', error);
     }
@@ -182,6 +241,15 @@ export default function HomeScreen() {
       console.log('💾 [STORAGE] Saved upload statuses');
     } catch (error) {
       console.error('❌ [STORAGE] Error saving upload statuses:', error);
+    }
+  };
+
+  const saveFlowTransactions = async (transactions: FlowTransaction[]) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.FLOW_TRANSACTIONS, JSON.stringify(transactions));
+      console.log('💾 [STORAGE] Saved flow transactions');
+    } catch (error) {
+      console.error('❌ [STORAGE] Error saving flow transactions:', error);
     }
   };
 
@@ -546,10 +614,70 @@ export default function HomeScreen() {
     }
   };
 
+  const mintHealthDataNFT = async () => {
+    if (!healthData) {
+      Alert.alert('Error', 'Please generate or fetch health data first');
+      return;
+    }
+
+    try {
+      setMintingNFT(true);
+      
+      // Generate data hash from health data
+      const dataHash = FlowBlockchainService.generateDataHash(healthData);
+      
+      // Get metrics from health data
+      const metrics = Object.keys(healthData).filter(key => healthData[key]?.length > 0);
+      
+      // Create NFT with health data
+      const nftName = `Wellrus Health Data - ${new Date().toLocaleDateString()}`;
+      const description = `Health metrics: ${metrics.join(', ')}. Biological age: ${biologicalAge?.biologicalAge || 'N/A'} years`;
+      const rarity = biologicalAge?.ageDifference < 0 ? 'Excellent' : biologicalAge?.ageDifference === 0 ? 'Good' : 'Standard';
+      const price = 0; // Free for demo
+      
+      Alert.alert(
+        'Minting NFT...',
+        `Creating Flow NFT with your health data:\n\n• Metrics: ${metrics.length}\n• Biological Age: ${biologicalAge?.biologicalAge || 'N/A'}\n• Rarity: ${rarity}`,
+        [{ text: 'Continue', style: 'default' }]
+      );
+      
+      const transaction = await FlowBlockchainService.mintHealthDataNFT(
+        nftName,
+        description,
+        dataHash,
+        metrics,
+        rarity,
+        price
+      );
+      
+      // Add explorer URL (always regenerate with current URL format)
+      transaction.explorerUrl = FlowBlockchainService.getTestnetExplorerUrl(transaction.transactionId);
+      
+      // Save transaction
+      const updatedTransactions = [...flowTransactions, transaction];
+      setFlowTransactions(updatedTransactions);
+      await saveFlowTransactions(updatedTransactions);
+      
+      // Log transaction details
+      FlowBlockchainService.logTransactionDetails(transaction);
+      
+      Alert.alert(
+        'NFT Minted Successfully! 🎉',
+        `Your health data NFT has been created on Flow blockchain.\n\nTransaction ID: ${transaction.transactionId}\nStatus: ${transaction.status}\nBlock Height: ${transaction.blockHeight}\n\nView transaction details using the dropdown below.`
+      );
+      
+    } catch (error) {
+      console.error('NFT minting error:', error);
+      Alert.alert('Minting Error', 'Failed to mint NFT on Flow blockchain');
+    } finally {
+      setMintingNFT(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Wellrus</Text>
+        <Text style={styles.title}>Connect Wearable</Text>
         
         {/* Biological Age Display */}
         {biologicalAge && (
@@ -702,7 +830,126 @@ export default function HomeScreen() {
               <Text style={styles.buttonText}>Upload to Walrus</Text>
             )}
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.flowButton, !healthData && styles.buttonDisabled]}
+            onPress={mintHealthDataNFT}
+            disabled={mintingNFT || !healthData}
+          >
+            {mintingNFT ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.buttonText}>🌊 Mint Flow NFT</Text>
+            )}
+          </TouchableOpacity>
         </View>
+
+        {/* Flow Blockchain Section */}
+        {flowTransactions.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Flow Blockchain Transactions</Text>
+            
+            <TouchableOpacity
+              style={styles.dropdownButton}
+              onPress={() => setShowTransactionDropdown(!showTransactionDropdown)}
+            >
+              <Text style={styles.dropdownButtonText}>
+                {selectedTransaction ? `Transaction: ${selectedTransaction.transactionId.substring(0, 12)}...` : 'Show Transaction'}
+              </Text>
+              <Text style={styles.dropdownArrow}>{showTransactionDropdown ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+
+            {showTransactionDropdown && (
+              <View style={styles.dropdownContainer}>
+                {flowTransactions.map((transaction, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setSelectedTransaction(transaction);
+                      setShowTransactionDropdown(false);
+                    }}
+                  >
+                    <Text style={styles.dropdownItemText}>
+                      {transaction.transactionId.substring(0, 16)}...
+                    </Text>
+                    <Text style={styles.dropdownItemSubtext}>
+                      {new Date(transaction.timestamp).toLocaleDateString()} • {transaction.status}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {selectedTransaction && (
+              <View style={styles.transactionDetails}>
+                <Text style={styles.transactionTitle}>Transaction Details</Text>
+                
+                <View style={styles.transactionRow}>
+                  <Text style={styles.transactionLabel}>Transaction ID:</Text>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      const explorerUrl = FlowBlockchainService.getTestnetExplorerUrl(selectedTransaction.transactionId);
+                      const fallbackUrl = FlowBlockchainService.getTestnetExplorerFallbackUrl(selectedTransaction.transactionId);
+                      await openExternal(explorerUrl, fallbackUrl);
+                    }}
+                  >
+                    <Text style={[styles.transactionValue, styles.transactionLink]}>
+                      {selectedTransaction.transactionId.length > 20 
+                        ? `${selectedTransaction.transactionId.substring(0, 20)}...` 
+                        : selectedTransaction.transactionId
+                      }
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={styles.transactionRow}>
+                  <Text style={styles.transactionLabel}>Status:</Text>
+                  <Text style={[styles.transactionValue, styles.statusSealed]}>
+                    {selectedTransaction.status.toUpperCase()}
+                  </Text>
+                </View>
+                
+                <View style={styles.transactionRow}>
+                  <Text style={styles.transactionLabel}>Block Height:</Text>
+                  <Text style={styles.transactionValue}>{selectedTransaction.blockHeight}</Text>
+                </View>
+                
+                <View style={styles.transactionRow}>
+                  <Text style={styles.transactionLabel}>Gas Used:</Text>
+                  <Text style={styles.transactionValue}>
+                    {selectedTransaction.gasUsed || 0} {selectedTransaction.gasless ? '(Gasless)' : ''}
+                  </Text>
+                </View>
+                
+                <View style={styles.transactionRow}>
+                  <Text style={styles.transactionLabel}>Timestamp:</Text>
+                  <Text style={styles.transactionValue}>
+                    {new Date(selectedTransaction.timestamp).toLocaleString()}
+                  </Text>
+                </View>
+                
+                <View style={styles.transactionRow}>
+                  <Text style={styles.transactionLabel}>Events:</Text>
+                  <Text style={styles.transactionValue}>{selectedTransaction.events.length}</Text>
+                </View>
+
+                {selectedTransaction.explorerUrl && (
+                  <TouchableOpacity
+                    style={styles.explorerButton}
+                    onPress={async () => {
+                      const explorerUrl = FlowBlockchainService.getTestnetExplorerUrl(selectedTransaction.transactionId);
+                      const fallbackUrl = FlowBlockchainService.getTestnetExplorerFallbackUrl(selectedTransaction.transactionId);
+                      await openExternal(explorerUrl, fallbackUrl);
+                    }}
+                  >
+                    <Text style={styles.explorerButtonText}>🔗 View on Flow Explorer</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Document Upload Section */}
         <View style={[styles.section, styles.documentSection]}>
@@ -1022,6 +1269,9 @@ const styles = StyleSheet.create({
   uploadButton: {
     backgroundColor: '#34C759',
   },
+  flowButton: {
+    backgroundColor: '#00EF8B',
+  },
   buttonDisabled: {
     opacity: 0.5,
   },
@@ -1055,5 +1305,104 @@ const styles = StyleSheet.create({
   blobId: {
     fontSize: 12,
     color: '#999',
+  },
+  dropdownButton: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    marginBottom: 12,
+  },
+  dropdownButtonText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  dropdownArrow: {
+    fontSize: 16,
+    color: '#666',
+  },
+  dropdownContainer: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dropdownItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f8f9fa',
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 4,
+  },
+  dropdownItemSubtext: {
+    fontSize: 12,
+    color: '#666',
+  },
+  transactionDetails: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 16,
+    marginTop: 12,
+  },
+  transactionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
+  transactionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    paddingVertical: 4,
+  },
+  transactionLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+    flex: 1,
+  },
+  transactionValue: {
+    fontSize: 14,
+    color: '#333',
+    flex: 2,
+    textAlign: 'right',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  transactionLink: {
+    color: '#007AFF',
+    textDecorationLine: 'underline',
+  },
+  statusSealed: {
+    color: '#34C759',
+    fontWeight: '600',
+  },
+  explorerButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  explorerButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

@@ -76,8 +76,29 @@ class SimpleFlowBlockchainService {
     return `0x${Date.now().toString(16)}${Math.random().toString(16).substring(2, 10)}`;
   }
 
+  isEVMTransaction(transactionId: string): boolean {
+    // EVM transactions start with 0x and are 66 chars (0x + 64 hex chars)
+    return transactionId.startsWith('0x') && transactionId.length === 66;
+  }
+
   getTestnetExplorerUrl(transactionId: string): string {
-    return `https://testnet.flowscan.org/transaction/${transactionId}`;
+    if (this.isEVMTransaction(transactionId)) {
+      // EVM testnet explorer
+      return `https://evm-testnet.flowscan.io/tx/${transactionId}`;
+    } else {
+      // Cadence/FCL transaction - use main flowscan.io (user sets testnet in UI)
+      return `https://www.flowscan.io/transaction/${transactionId}`;
+    }
+  }
+
+  getTestnetExplorerFallbackUrl(transactionId: string): string {
+    if (this.isEVMTransaction(transactionId)) {
+      // EVM doesn't have a good fallback, stick with primary
+      return this.getTestnetExplorerUrl(transactionId);
+    } else {
+      // Cadence fallback explorer
+      return `https://flow-view-source.com/testnet/transaction/${transactionId}`;
+    }
   }
   
   logTransactionDetails(transaction: FlowTransaction): void {
