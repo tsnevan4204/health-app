@@ -5,8 +5,10 @@ let AppleHealthKit: any = null;
 try {
   if (Platform.OS === 'ios') {
     AppleHealthKit = require('react-native-health').default;
+    console.log('✅ Successfully loaded react-native-health module');
   }
 } catch (error) {
+  console.log('❌ Failed to load react-native-health module:', error);
   // HealthKit not available, will use mock data
 }
 
