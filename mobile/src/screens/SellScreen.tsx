@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import flowBlockchainService, { FlowTransaction } from '../services/flowBlockchainHTTP';
 
 interface DataPackage {
   id: string;
@@ -72,6 +73,35 @@ export default function SellScreen() {
 
   const [listedPackages, setListedPackages] = useState<ListedPackage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [testnetStatus, setTestnetStatus] = useState<{
+    isConnected: boolean;
+    blockHeight: number | null;
+    balance: number;
+  } | null>(null);
+  
+  // Check testnet status on component mount
+  React.useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const status = await flowBlockchainService.checkTestnetStatus();
+        setTestnetStatus(status);
+        
+        if (!status.isConnected) {
+          console.warn('⚠️ Flow testnet connection issues detected');
+        }
+        
+        if (status.balance === 0) {
+          console.warn('⚠️ Service account has 0 FLOW balance');
+          console.log('💡 Visit https://testnet-faucet.onflow.org/ to fund the account');
+        }
+      } catch (error) {
+        console.error('❌ Failed to check testnet status:', error);
+        setTestnetStatus({ isConnected: false, blockHeight: null, balance: 0 });
+      }
+    };
+    
+    checkStatus();
+  }, []);
 
   const getRarityColor = (rarity: string) => {
     switch (rarity) {
@@ -83,10 +113,24 @@ export default function SellScreen() {
     }
   };
 
-  const simulateFlowTransaction = async (packageData: DataPackage): Promise<string> => {
-    // Simulate Flow blockchain transaction
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    return `flow_tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const mintFlowNFT = async (packageData: DataPackage): Promise<FlowTransaction> => {
+    console.log('🌊 Starting real Flow NFT minting...');
+    
+    const dataHash = flowBlockchainService.generateDataHash({
+      metrics: packageData.metrics,
+      duration: packageData.duration,
+      samples: packageData.samples,
+      category: packageData.category
+    });
+
+    return await flowBlockchainService.mintHealthDataNFT(
+      packageData.title,
+      packageData.description,
+      dataHash,
+      packageData.metrics,
+      packageData.rarity,
+      packageData.price
+    );
   };
 
   const listDataPackage = async (dataPackage: DataPackage) => {
@@ -102,26 +146,66 @@ export default function SellScreen() {
             text: 'List for Sale',
             onPress: async () => {
               try {
-                // Simulate blockchain transaction
-                const transactionId = await simulateFlowTransaction(dataPackage);
+                console.log('🚀 Initiating real Flow transaction...');
+                
+                // Execute real Flow blockchain transaction
+                const flowTransaction = await mintFlowNFT(dataPackage);
                 
                 const listedPackage: ListedPackage = {
                   ...dataPackage,
-                  status: 'active',
+                  status: flowTransaction.status === 'sealed' ? 'active' : 'pending',
                   views: 0,
                   listedAt: new Date(),
-                  transactionId,
+                  transactionId: flowTransaction.transactionId,
                 };
 
                 setListedPackages(prev => [...prev, listedPackage]);
                 setAvailablePackages(prev => prev.filter(p => p.id !== dataPackage.id));
 
+                const explorerUrl = flowBlockchainService.getTestnetExplorerUrl(flowTransaction.transactionId);
+                
+                // Log detailed transaction information
+                flowBlockchainService.logTransactionDetails(flowTransaction);
+                
+                // Show success/pending alert with comprehensive details
+                const isSealed = flowTransaction.status === 'sealed';
+                const statusEmoji = isSealed ? '🎉' : '⏳';
+                const statusText = isSealed ? 'Successfully Minted!' : 'Transaction Submitted!';
+                const actionText = isSealed ? 'minted' : 'submitted';
+                
                 Alert.alert(
-                  'Successfully Listed! 🎉',
-                  `Your data package has been minted as an NFT on Flow blockchain.\n\nTransaction ID: ${transactionId}\n\nYour data is now available in the marketplace!`
+                  `${statusText} ${statusEmoji}`,
+                  `Your health data NFT has been ${actionText} on Flow testnet.\n\n🆔 Transaction: ${flowTransaction.transactionId}\n🏗️ Block: ${flowTransaction.blockHeight || 'Pending'}\n⛽ Gas: ${flowTransaction.gasUsed || 0} FLOW (Gasless!)\n📋 Events: ${flowTransaction.events.length}\n\n🔗 View on Flowscan`,
+                  [
+                    { 
+                      text: 'View Explorer', 
+                      onPress: () => {
+                        console.log('🔗 Opening Flow testnet explorer:', explorerUrl);
+                        // In a real app, you would open the URL in a browser
+                        // Linking.openURL(explorerUrl);
+                      }
+                    },
+                    { text: 'OK', style: 'default' }
+                  ]
                 );
               } catch (error) {
-                Alert.alert('Error', 'Failed to list data package on Flow blockchain');
+                console.error('❌ Flow transaction error:', error);
+                
+                // Enhanced error logging
+                console.error('🔧 Troubleshooting:');
+                console.error('  1. Check testnet connection');
+                console.error('  2. Verify service account has FLOW tokens');
+                console.error('  3. Ensure contract is deployed on testnet');
+                console.error('  4. Visit https://testnet-faucet.onflow.org/ for tokens');
+                
+                Alert.alert(
+                  'Transaction Failed ❌', 
+                  `Failed to mint NFT on Flow testnet.\n\nError: ${error instanceof Error ? error.message : 'Unknown error'}\n\n🔧 Common solutions:\n• Check internet connection\n• Verify testnet tokens in service account\n• Try again in a few moments\n\n💰 Need testnet tokens? Visit:\nhttps://testnet-faucet.onflow.org/`,
+                  [
+                    { text: 'Get Testnet Tokens', onPress: () => console.log('💰 Visit: https://testnet-faucet.onflow.org/') },
+                    { text: 'OK', style: 'cancel' }
+                  ]
+                );
               }
             }
           }
@@ -225,13 +309,31 @@ export default function SellScreen() {
         {/* Flow Blockchain Info */}
         <TouchableOpacity style={styles.flowCard} onPress={viewMarketplace}>
           <View style={styles.flowHeader}>
-            <Text style={styles.flowTitle}>🌊 Flow Blockchain</Text>
-            <Text style={styles.flowBadge}>Tap to Learn More</Text>
+            <Text style={styles.flowTitle}>🌊 Flow Testnet</Text>
+            <Text style={styles.flowBadge}>Gasless Transactions</Text>
           </View>
           <Text style={styles.flowDescription}>
             Fast, developer-friendly blockchain designed for mainstream adoption. 
             Low fees, high throughput, and sustainable proof-of-stake consensus.
           </Text>
+          
+          {/* Testnet Status */}
+          {testnetStatus && (
+            <View style={styles.testnetStatus}>
+              <Text style={styles.testnetStatusText}>
+                {testnetStatus.isConnected ? '✅' : '❌'} Connection: {testnetStatus.isConnected ? 'Active' : 'Failed'}
+              </Text>
+              {testnetStatus.blockHeight && (
+                <Text style={styles.testnetStatusText}>📦 Block: {testnetStatus.blockHeight}</Text>
+              )}
+              <Text style={styles.testnetStatusText}>
+                💰 Balance: {testnetStatus.balance.toFixed(2)} FLOW
+              </Text>
+              {testnetStatus.balance === 0 && (
+                <Text style={styles.warningText}>⚠️ Service account needs funding</Text>
+              )}
+            </View>
+          )}
         </TouchableOpacity>
 
         {/* Available Packages */}
@@ -333,6 +435,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(255,255,255,0.9)',
     lineHeight: 20,
+    marginBottom: 12,
+  },
+  testnetStatus: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+  },
+  testnetStatusText: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: 4,
+  },
+  warningText: {
+    fontSize: 12,
+    color: '#ffeb3b',
+    fontWeight: 'bold',
+    marginTop: 4,
   },
   section: {
     marginBottom: 32,
