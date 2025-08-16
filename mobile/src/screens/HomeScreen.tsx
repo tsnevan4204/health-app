@@ -81,7 +81,7 @@ interface UploadStatus {
   error?: string;
 }
 
-export default function HealthImportScreen() {
+export default function HomeScreen() {
   const [isHealthKitAvailable, setIsHealthKitAvailable] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
