@@ -5,14 +5,67 @@ let AppleHealthKit: any = null;
 
 try {
   if (Platform.OS === 'ios') {
-    AppleHealthKit = require('react-native-health');
-    // Handle different export formats
-    if (AppleHealthKit.default) {
-      AppleHealthKit = AppleHealthKit.default;
+    console.log('🔍 [IMPORT] Attempting to import react-native-health...');
+    
+    // Try ES6 import first
+    try {
+      const HealthKit = require('react-native-health');
+      console.log('📦 [IMPORT] react-native-health module loaded via require:', !!HealthKit);
+      console.log('📦 [IMPORT] Available exports:', Object.keys(HealthKit || {}));
+      
+      // Try to extract AppleHealthKit from different possible export patterns
+      const possibleImports = [
+        HealthKit,
+        HealthKit.default,
+        HealthKit.AppleHealthKit,
+        HealthKit.HealthKit
+      ];
+      
+      for (let i = 0; i < possibleImports.length; i++) {
+        const candidate = possibleImports[i];
+        console.log(`🔍 [IMPORT] Checking candidate ${i}:`, !!candidate, typeof candidate);
+        
+        if (candidate && typeof candidate.initHealthKit === 'function') {
+          AppleHealthKit = candidate;
+          console.log(`✅ [IMPORT] Found working AppleHealthKit at candidate ${i}`);
+          break;
+        }
+      }
+      
+      // If nothing worked, try direct ES6 import
+      if (!AppleHealthKit) {
+        console.log('🔄 [IMPORT] Trying direct ES6 import...');
+        const ImportedHealthKit = require('react-native-health');
+        
+        // Check if it's the module itself that has the methods
+        if (ImportedHealthKit && typeof ImportedHealthKit.initHealthKit === 'function') {
+          AppleHealthKit = ImportedHealthKit;
+          console.log('✅ [IMPORT] Using direct module import');
+        } else if (ImportedHealthKit && ImportedHealthKit.default && typeof ImportedHealthKit.default.initHealthKit === 'function') {
+          AppleHealthKit = ImportedHealthKit.default;
+          console.log('✅ [IMPORT] Using default export');
+        }
+      }
+      
+    } catch (importError) {
+      console.error('❌ [IMPORT] ES6 import failed:', importError);
+      
+      // Fallback to dynamic import
+      console.log('🔄 [IMPORT] Trying fallback import...');
+      AppleHealthKit = null;
+    }
+    
+    console.log('🏥 [IMPORT] Final AppleHealthKit status:', !!AppleHealthKit);
+    if (AppleHealthKit) {
+      console.log('📱 [IMPORT] initHealthKit available:', typeof AppleHealthKit.initHealthKit);
+      console.log('🔑 [IMPORT] Constants available:', typeof AppleHealthKit.Constants);
+      console.log('🔍 [IMPORT] isAvailable method:', typeof AppleHealthKit.isAvailable);
+      console.log('🎯 [IMPORT] AppleHealthKit methods:', Object.keys(AppleHealthKit).filter(key => typeof AppleHealthKit[key] === 'function'));
     }
   }
 } catch (error) {
-  console.log('HealthKit not available, using mock data');
+  console.error('❌ [IMPORT] HealthKit import completely failed:', error);
+  console.error('❌ [IMPORT] Error stack:', (error as Error)?.stack);
 }
 
 export interface HealthMetric {
@@ -30,29 +83,21 @@ export interface HealthDataRange {
 }
 
 const getPermissions = () => {
-  if (!AppleHealthKit || !AppleHealthKit.Constants) {
-    return null;
-  }
-  
-  try {
-    return {
-      permissions: {
-        read: [
-          AppleHealthKit.Constants.Permissions.HeartRateVariability,
-          AppleHealthKit.Constants.Permissions.RestingHeartRate,
-          AppleHealthKit.Constants.Permissions.ActiveEnergyBurned,
-          AppleHealthKit.Constants.Permissions.AppleExerciseTime,
-          AppleHealthKit.Constants.Permissions.HeartRate,
-          AppleHealthKit.Constants.Permissions.Steps,
-          AppleHealthKit.Constants.Permissions.DistanceWalkingRunning,
-        ],
-        write: [],
-      },
-    };
-  } catch (error) {
-    console.log('HealthKit Constants not available');
-    return null;
-  }
+  // Use string constants as per react-native-health documentation
+  return {
+    permissions: {
+      read: [
+        'HeartRateVariability',
+        'RestingHeartRate', 
+        'ActiveEnergyBurned',
+        'AppleExerciseTime',
+        'HeartRate',
+        'StepCount',
+        'DistanceWalkingRunning',
+      ],
+      write: [],
+    },
+  };
 };
 
 class HealthKitService {
@@ -60,37 +105,140 @@ class HealthKitService {
   private useMockData: boolean = false;
 
   async initialize(): Promise<boolean> {
-    // Check if HealthKit is available
-    const permissions = getPermissions();
-    if (!AppleHealthKit || !permissions || !AppleHealthKit.initHealthKit) {
-      console.log('HealthKit not available, enabling mock data mode');
+    console.log('🎯 [SERVICE] initialize() called');
+    console.log('🏥 [SERVICE] Initializing HealthKit...');
+    console.log('📱 [SERVICE] Platform.OS:', Platform.OS);
+    console.log('🍎 [SERVICE] AppleHealthKit available:', !!AppleHealthKit);
+    
+    // Check if we're on iOS and HealthKit is available
+    if (Platform.OS !== 'ios') {
+      console.log('❌ [SERVICE] Not on iOS, using mock data');
       this.useMockData = true;
       this.isAvailable = true;
       return true;
     }
 
-    return new Promise((resolve, reject) => {
-      try {
-        AppleHealthKit.initHealthKit(permissions, (error: string) => {
+    if (!AppleHealthKit) {
+      console.log('❌ [SERVICE] HealthKit library not available, using mock data');
+      this.useMockData = true;
+      this.isAvailable = false;
+      return false;
+    }
+
+    // Check if HealthKit is available on this device
+    try {
+      console.log('🔍 [SERVICE] Checking if HealthKit is available on device...');
+      const isAvailable = await new Promise((resolve) => {
+        AppleHealthKit.isAvailable((error: any, available: boolean) => {
+          console.log('📞 [SERVICE] AppleHealthKit.isAvailable callback called');
+          console.log('📞 [SERVICE] Error:', error);
+          console.log('📞 [SERVICE] Available:', available);
+          
           if (error) {
-            console.error('HealthKit permission error, falling back to mock data:', error);
+            console.log('❌ [SERVICE] HealthKit not available on device:', error);
+            resolve(false);
+          } else {
+            resolve(available);
+          }
+        });
+      });
+
+      console.log('🔍 [SERVICE] HealthKit availability check result:', isAvailable);
+
+      if (!isAvailable) {
+        console.log('❌ [SERVICE] HealthKit not available on this device');
+        this.useMockData = true;
+        this.isAvailable = false;
+        return false;
+      }
+
+      // HealthKit is available, start with mock data until user connects
+      this.isAvailable = true;
+      this.useMockData = true;
+      console.log('✅ [SERVICE] HealthKit available on device, starting with mock data');
+      console.log('📊 [SERVICE] Final state - isAvailable:', this.isAvailable, 'useMockData:', this.useMockData);
+      return true;
+    } catch (error) {
+      console.log('❌ [SERVICE] Error checking HealthKit availability:', error);
+      console.error('❌ [SERVICE] Error stack:', (error as Error)?.stack);
+      this.useMockData = true;
+      this.isAvailable = false;
+      return false;
+    }
+  }
+
+  async requestPermissions(): Promise<boolean> {
+    console.log('🎯 [SERVICE] requestPermissions() called');
+    console.log('🔐 [SERVICE] User requesting HealthKit permissions...');
+    console.log('📱 [SERVICE] Platform.OS:', Platform.OS);
+    console.log('🍎 [SERVICE] AppleHealthKit available:', !!AppleHealthKit);
+    console.log('🏥 [SERVICE] this.isAvailable:', this.isAvailable);
+    console.log('📊 [SERVICE] this.useMockData:', this.useMockData);
+    
+    // Check if we're on iOS and HealthKit is available
+    if (Platform.OS !== 'ios') {
+      console.log('❌ [SERVICE] Not on iOS, cannot request permissions');
+      return false;
+    }
+
+    if (!AppleHealthKit) {
+      console.log('❌ [SERVICE] HealthKit library not available');
+      return false;
+    }
+
+    if (!this.isAvailable) {
+      console.log('❌ [SERVICE] HealthKit not available on this device');
+      return false;
+    }
+
+    const permissions = getPermissions();
+    console.log('🔑 [SERVICE] Generated permissions object:', JSON.stringify(permissions, null, 2));
+
+    // Request HealthKit permissions
+    return new Promise((resolve) => {
+      try {
+        console.log('🔐 [SERVICE] Calling AppleHealthKit.initHealthKit...');
+        console.log('🔐 [SERVICE] Permissions being passed:', permissions);
+        
+        AppleHealthKit.initHealthKit(permissions, (error: string, results: any) => {
+          console.log('📞 [SERVICE] HealthKit initHealthKit callback called!');
+          console.log('📞 [SERVICE] Error:', error);
+          console.log('📞 [SERVICE] Results:', results);
+          console.log('📞 [SERVICE] Error type:', typeof error);
+          
+          if (error) {
+            console.warn('❌ [SERVICE] HealthKit permission denied or error:', error);
+            console.log('📱 [SERVICE] User can grant permissions in Settings > Health > Data Access & Devices');
             this.useMockData = true;
-            this.isAvailable = true;
-            resolve(true);
+            console.log('🔄 [SERVICE] Resolving with false due to error');
+            resolve(false);
             return;
           }
-          this.isAvailable = true;
+          
+          // Success! Real HealthKit is available
           this.useMockData = false;
-          console.log('HealthKit initialized successfully');
+          console.log('✅ [SERVICE] HealthKit permissions granted - will use real data');
+          console.log('🔄 [SERVICE] Resolving with true - success!');
           resolve(true);
         });
+        
+        console.log('🔐 [SERVICE] AppleHealthKit.initHealthKit called, waiting for callback...');
       } catch (error) {
-        console.error('HealthKit initialization error:', error);
+        console.error('❌ [SERVICE] HealthKit permission request failed with exception:', error);
+        console.error('❌ [SERVICE] Error stack:', (error as Error)?.stack);
         this.useMockData = true;
-        this.isAvailable = true;
-        resolve(true);
+        console.log('🔄 [SERVICE] Resolving with false due to exception');
+        resolve(false);
       }
     });
+  }
+
+  isUsingMockData(): boolean {
+    return this.useMockData;
+  }
+
+  getDataSource(): string {
+    return this.useMockData ? 'Mock Data (for demo)' : 'Apple Health';
   }
 
   private generateMockData(metric: string, range: HealthDataRange, count: number): HealthMetric[] {
@@ -148,7 +296,7 @@ class HealthKitService {
       return this.generateMockData('hrv', range, 30);
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const options = {
         startDate: range.startDate.toISOString(),
         endDate: range.endDate.toISOString(),
@@ -189,14 +337,14 @@ class HealthKitService {
       return this.generateMockData('rhr', range, 30);
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const options = {
         startDate: range.startDate.toISOString(),
         endDate: range.endDate.toISOString(),
         ascending: true,
       };
 
-      AppleHealthKit.getRestingHeartRate(
+      AppleHealthKit.getRestingHeartRateSamples(
         options,
         (err: any, results: any[]) => {
           if (err) {
@@ -229,7 +377,7 @@ class HealthKitService {
       return this.generateMockData('active_calories', range, 30);
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const options = {
         startDate: range.startDate.toISOString(),
         endDate: range.endDate.toISOString(),
@@ -269,15 +417,15 @@ class HealthKitService {
       return this.generateMockData('exercise_minutes', range, 30);
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const options = {
         startDate: range.startDate.toISOString(),
         endDate: range.endDate.toISOString(),
         ascending: true,
       };
 
-      AppleHealthKit.getAppleExerciseTime(
-        options,
+      AppleHealthKit.getSamples(
+        { ...options, type: 'AppleExerciseTime' },
         (err: any, results: any[]) => {
           if (err) {
             console.warn('Exercise fetch failed, using mock data:', err);

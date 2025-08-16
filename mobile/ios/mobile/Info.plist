@@ -49,6 +49,7 @@
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>arm64</string>
+		<string>healthkit</string>
 	</array>
 	<key>UIRequiresFullScreen</key>
 	<false/>
@@ -70,5 +71,9 @@
 	<string>Light</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+	<key>NSHealthShareUsageDescription</key>
+	<string>This app needs access to your health data to provide personalized insights and enable challenges.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>This app may write health data for challenge tracking.</string>
 </dict>
 </plist>

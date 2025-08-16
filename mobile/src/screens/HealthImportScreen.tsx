@@ -46,19 +46,24 @@ export default function HealthImportScreen() {
   const [healthData, setHealthData] = useState<any>(null);
 
   useEffect(() => {
+    console.log('🎯 [SCREEN] HealthImportScreen useEffect called - initializing HealthKit');
     initializeHealthKit();
   }, []);
 
   const initializeHealthKit = async () => {
     try {
+      console.log('🎯 [SCREEN] initializeHealthKit called');
       setLoading(true);
+      console.log('🔄 [SCREEN] Calling HealthKitService.initialize()');
       const available = await HealthKitService.initialize();
+      console.log('✅ [SCREEN] HealthKitService.initialize() returned:', available);
       setIsHealthKitAvailable(available);
-      console.log('HealthKit initialized:', available);
+      console.log('📊 [SCREEN] Set isHealthKitAvailable to:', available);
     } catch (error) {
-      console.error('HealthKit initialization error:', error);
+      console.error('❌ [SCREEN] HealthKit initialization error:', error);
       setIsHealthKitAvailable(true); // Still allow using mock data
     } finally {
+      console.log('🏁 [SCREEN] initializeHealthKit finished, setting loading to false');
       setLoading(false);
     }
   };
@@ -67,9 +72,60 @@ export default function HealthImportScreen() {
     setMetrics(prev => ({ ...prev, [metric]: !prev[metric] }));
   };
 
+  const requestHealthPermissions = async () => {
+    try {
+      console.log('🎯 [UI] requestHealthPermissions called');
+      setLoading(true);
+      console.log('🔐 [UI] User requesting health permissions, loading set to true');
+      
+      console.log('🔄 [UI] Calling HealthKitService.requestPermissions()...');
+      const granted = await HealthKitService.requestPermissions();
+      console.log('✅ [UI] HealthKitService.requestPermissions() returned:', granted);
+      
+      if (granted) {
+        console.log('🟢 [UI] Permissions granted, updating UI state');
+        // Force a re-render to update the UI
+        setIsHealthKitAvailable(true);
+        Alert.alert(
+          'Health Access Granted! 🎉',
+          'You can now fetch real health data from Apple Health.',
+          [{ text: 'Continue', onPress: fetchHealthData }]
+        );
+      } else {
+        console.log('🔴 [UI] Permissions denied, showing retry dialog');
+        Alert.alert(
+          'Health Access Needed',
+          'To access your health data, please grant permissions in the Health app or try again.',
+          [
+            { text: 'Try Again', onPress: requestHealthPermissions },
+            { text: 'Use Demo Data', style: 'cancel' }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('❌ [UI] Error requesting health permissions:', error);
+      Alert.alert('Error', 'Failed to request health permissions: ' + error.message);
+    } finally {
+      console.log('🏁 [UI] Setting loading to false');
+      setLoading(false);
+    }
+  };
+
   const fetchHealthData = async () => {
+    console.log('🎯 [UI] fetchHealthData called');
+    console.log('📊 [UI] isHealthKitAvailable:', isHealthKitAvailable);
+    console.log('📱 [UI] HealthKitService.isUsingMockData():', HealthKitService.isUsingMockData());
+    
     if (!isHealthKitAvailable) {
+      console.log('❌ [UI] HealthKit not available, showing error');
       Alert.alert('Error', 'HealthKit is not available');
+      return;
+    }
+
+    // If using mock data, request permissions first
+    if (HealthKitService.isUsingMockData()) {
+      console.log('🔄 [UI] Using mock data, requesting permissions first');
+      await requestHealthPermissions();
       return;
     }
 
@@ -79,9 +135,10 @@ export default function HealthImportScreen() {
       const data = await HealthKitService.getAllHealthData(range);
       setHealthData(data);
       
+      const dataSource = HealthKitService.isUsingMockData() ? 'Demo' : 'Apple Health';
       Alert.alert(
         'Data Fetched',
-        `Successfully fetched:\n` +
+        `Successfully fetched from ${dataSource}:\n` +
         `• HRV: ${data.hrv.length} samples\n` +
         `• RHR: ${data.rhr.length} samples\n` +
         `• Calories: ${data.calories.length} samples\n` +
@@ -223,10 +280,21 @@ export default function HealthImportScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.title}>Import Health Data</Text>
         
-        {/* Debug Info */}
+        {/* Connection Status */}
         <View style={styles.debugSection}>
           <Text style={styles.debugText}>
-            🔧 Debug: {isHealthKitAvailable ? 'HealthKit Ready' : 'Using Mock Data'}
+            {!HealthKitService.isUsingMockData() 
+              ? '🟢 Connected to Apple Health - Real Data' 
+              : isHealthKitAvailable 
+                ? '🟡 Apple Health Available - Demo Data' 
+                : '🔴 Apple Health Unavailable - Demo Data'
+            }
+          </Text>
+          <Text style={styles.connectionSubtext}>
+            {!HealthKitService.isUsingMockData() 
+              ? '✅ Real health data access granted' 
+              : '📱 Tap "Connect & Fetch Health Data" to access your real Apple Health data'
+            }
           </Text>
         </View>
         
@@ -304,15 +372,34 @@ export default function HealthImportScreen() {
 
         {/* Action Buttons */}
         <View style={styles.buttonContainer}>
+          {HealthKitService.isUsingMockData() && (
+            <TouchableOpacity
+              style={[styles.button, styles.connectButton]}
+              onPress={() => Alert.alert(
+                'Connect to Apple Health',
+                'To access real health data:\n\n1. Tap "Fetch Health Data" below\n2. Grant permissions when prompted\n3. Select which data to share\n\nThis will enable real-time access to your Apple Health data.',
+                [{ text: 'Got it', style: 'default' }]
+              )}
+            >
+              <Text style={styles.buttonText}>📱 How to Connect Apple Health</Text>
+            </TouchableOpacity>
+          )}
+          
           <TouchableOpacity
             style={[styles.button, styles.fetchButton]}
-            onPress={fetchHealthData}
+            onPress={() => {
+              console.log('🎯 [BUTTON] Connect to Apple Health button pressed!');
+              console.log('📊 [BUTTON] Button state - loading:', loading, 'isHealthKitAvailable:', isHealthKitAvailable);
+              fetchHealthData();
+            }}
             disabled={loading || !isHealthKitAvailable}
           >
             {loading ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text style={styles.buttonText}>Fetch Health Data</Text>
+              <Text style={styles.buttonText}>
+                {HealthKitService.isUsingMockData() ? 'Connect to Apple Health' : 'Fetch Health Data'}
+              </Text>
             )}
           </TouchableOpacity>
 
@@ -375,6 +462,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1976d2',
     fontWeight: '500',
+  },
+  connectionSubtext: {
+    fontSize: 12,
+    color: '#1565c0',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   datePickerContainer: {
     minHeight: 44,
@@ -460,6 +553,9 @@ const styles = StyleSheet.create({
   },
   fetchButton: {
     backgroundColor: '#007AFF',
+  },
+  connectButton: {
+    backgroundColor: '#FF9500',
   },
   uploadButton: {
     backgroundColor: '#34C759',

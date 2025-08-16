@@ -25,6 +25,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "react-native-health",
+        {
+          "healthSharePermission": "This app needs access to your health data to provide personalized insights and enable challenges.",
+          "healthUpdatePermission": "This app may write health data for challenge tracking."
+        }
+      ]
+    ]
   }
 }
