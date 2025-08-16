@@ -76,7 +76,7 @@ class WalrusService {
       }
 
       // Generate simulated blob ID
-      const blobId = `sim_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const blobId = `sim_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
       const checksum = await EncryptionService.hashData(uploadData);
       
       // Simulate storage (optional - store in AsyncStorage for later retrieval)

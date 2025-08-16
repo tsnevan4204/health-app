@@ -30,6 +30,12 @@
 				<string>com.anonymous.mobile</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>exp+mobile</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
@@ -44,12 +50,15 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSHealthShareUsageDescription</key>
+	<string>This app needs access to your health data to provide personalized insights and enable challenges.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>This app may write health data for challenge tracking.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>SplashScreen</string>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>arm64</string>
-		<string>healthkit</string>
 	</array>
 	<key>UIRequiresFullScreen</key>
 	<false/>
@@ -71,9 +80,5 @@
 	<string>Light</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
-	<key>NSHealthShareUsageDescription</key>
-	<string>This app needs access to your health data to provide personalized insights and enable challenges.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>This app may write health data for challenge tracking.</string>
 </dict>
 </plist>

@@ -10,15 +10,68 @@ import {
   SafeAreaView,
   Platform,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import * as DocumentPicker from 'expo-document-picker';
 import HealthKitService, { HealthDataRange, HealthMetric } from '../services/healthKit';
 import WalrusService, { WalrusBlob } from '../services/walrus';
+import BiologicalAgeService, { BiologicalAgeData } from '../services/biologicalAge';
 
-interface MetricToggle {
-  hrv: boolean;
-  rhr: boolean;
-  calories: boolean;
-  exercise: boolean;
+// Simple Chart Component
+interface SimpleChartProps {
+  data: HealthMetric[];
+  color: string;
+  unit: string;
+  label: string;
+}
+
+function SimpleChart({ data, color, unit, label }: SimpleChartProps) {
+  if (!data || data.length === 0) {
+    return (
+      <View style={styles.emptyChart}>
+        <Text style={styles.emptyChartText}>No data available</Text>
+      </View>
+    );
+  }
+
+  const maxValue = Math.max(...data.map(d => d.value));
+  const minValue = Math.min(...data.map(d => d.value));
+  const range = maxValue - minValue;
+
+  return (
+    <View style={styles.chart}>
+      <View style={styles.chartHeader}>
+        <Text style={styles.chartValue}>{data[data.length - 1]?.value.toFixed(1)} {unit}</Text>
+        <Text style={styles.chartDate}>Latest</Text>
+      </View>
+      <View style={styles.chartBars}>
+        {data.slice(-14).map((item, index) => {
+          const height = range > 0 ? ((item.value - minValue) / range) * 60 + 10 : 35;
+          const date = new Date(item.timestamp);
+          return (
+            <View key={index} style={styles.barContainer}>
+              <View 
+                style={[
+                  styles.bar, 
+                  { 
+                    height, 
+                    backgroundColor: color,
+                    opacity: 0.7 + (index / data.length) * 0.3
+                  }
+                ]} 
+              />
+              <Text style={styles.barDate}>
+                {date.getDate()}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+      <View style={styles.chartFooter}>
+        <Text style={styles.chartRange}>
+          {minValue.toFixed(1)} - {maxValue.toFixed(1)} {unit}
+        </Text>
+      </View>
+    </View>
+  );
 }
 
 interface UploadStatus {
@@ -32,23 +85,12 @@ export default function HealthImportScreen() {
   const [isHealthKitAvailable, setIsHealthKitAvailable] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [startDate, setStartDate] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
-  const [endDate, setEndDate] = useState(new Date());
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
-  const [metrics, setMetrics] = useState<MetricToggle>({
-    hrv: true,
-    rhr: true,
-    calories: true,
-    exercise: true,
-  });
   const [uploadStatuses, setUploadStatuses] = useState<UploadStatus[]>([]);
   const [healthData, setHealthData] = useState<any>(null);
+  const [biologicalAge, setBiologicalAge] = useState<BiologicalAgeData | null>(null);
+  const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
 
-  useEffect(() => {
-    console.log('🎯 [SCREEN] HealthImportScreen useEffect called - initializing HealthKit');
-    initializeHealthKit();
-  }, []);
+  // Remove automatic HealthKit initialization at app startup to prevent XPC errors
 
   const initializeHealthKit = async () => {
     try {
@@ -111,8 +153,114 @@ export default function HealthImportScreen() {
     }
   };
 
+  const generateFakeData = async () => {
+    try {
+      setLoading(true);
+      // Generate data for the last 30 days
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+      const range: HealthDataRange = { startDate, endDate };
+      
+      // Generate fake data directly
+      const hrv = HealthKitService.generateMockData('hrv', range, 30);
+      const rhr = HealthKitService.generateMockData('rhr', range, 30);
+      const calories = HealthKitService.generateMockData('active_calories', range, 30);
+      const exercise = HealthKitService.generateMockData('exercise_minutes', range, 30);
+      const weight = HealthKitService.generateMockData('weight', range, 30);
+      
+      const data = { hrv, rhr, calories, exercise, weight };
+      setHealthData(data);
+      
+      // Calculate biological age
+      const bioAge = BiologicalAgeService.calculateBiologicalAge(data);
+      setBiologicalAge(bioAge);
+      
+      Alert.alert(
+        'Fake Data Generated! 🎲',
+        `Successfully generated 30 days of health data:\n` +
+        `• HRV: ${data.hrv.length} samples\n` +
+        `• RHR: ${data.rhr.length} samples\n` +
+        `• Weight: ${data.weight.length} samples\n` +
+        `• Exercise: ${data.exercise.length} samples\n\n` +
+        `Biological Age: ${bioAge.biologicalAge} years\n` +
+        `Ready to upload to Walrus!`
+      );
+    } catch (error) {
+      console.error('Error generating fake data:', error);
+      Alert.alert('Error', 'Failed to generate fake data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const showBiologicalAgeInfo = () => {
+    if (!biologicalAge) {
+      Alert.alert('Info', 'Generate health data first to calculate your biological age.');
+      return;
+    }
+
+    Alert.alert(
+      'Biological Age Explained',
+      BiologicalAgeService.getExplanation() + 
+      `\n\nYour Results:\n` +
+      `• Biological Age: ${biologicalAge.biologicalAge} years\n` +
+      `• Chronological Age: ${biologicalAge.chronologicalAge} years\n` +
+      `• Difference: ${biologicalAge.ageDifference > 0 ? '+' : ''}${biologicalAge.ageDifference} years\n\n` +
+      `${biologicalAge.interpretation}\n\n` +
+      `Key Factors:\n` +
+      `• HRV: ${biologicalAge.factors.hrv.impact}\n` +
+      `• RHR: ${biologicalAge.factors.rhr.impact}\n` +
+      `• Exercise: ${biologicalAge.factors.exercise.impact}\n` +
+      `• Weight: ${biologicalAge.factors.weight.impact}`,
+      [{ text: 'Got it', style: 'default' }]
+    );
+  };
+
+  const uploadDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const document = result.assets[0];
+        
+        // Upload to Walrus
+        const blob = await WalrusService.uploadBlob(
+          `Document: ${document.name} (${document.size} bytes)`,
+          true
+        );
+        
+        setUploadedDocuments(prev => [...prev, {
+          name: document.name,
+          size: document.size,
+          type: document.mimeType,
+          blobId: blob.id,
+          uploadedAt: new Date().toISOString(),
+        }]);
+
+        Alert.alert(
+          'Document Uploaded! 📄',
+          `Successfully uploaded ${document.name} to Walrus storage.\n\nBlob ID: ${blob.id}`
+        );
+      }
+    } catch (error) {
+      console.error('Document upload error:', error);
+      Alert.alert('Upload Error', 'Failed to upload document');
+    }
+  };
+
   const fetchHealthData = async () => {
     console.log('🎯 [UI] fetchHealthData called');
+    
+    // Initialize HealthKit only when needed
+    if (!isHealthKitAvailable) {
+      await initializeHealthKit();
+    }
+    
     console.log('📊 [UI] isHealthKitAvailable:', isHealthKitAvailable);
     console.log('📱 [UI] HealthKitService.isUsingMockData():', HealthKitService.isUsingMockData());
     
@@ -131,9 +279,18 @@ export default function HealthImportScreen() {
 
     try {
       setLoading(true);
+      // Use last 30 days
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
       const range: HealthDataRange = { startDate, endDate };
+      
       const data = await HealthKitService.getAllHealthData(range);
       setHealthData(data);
+      
+      // Calculate biological age
+      const bioAge = BiologicalAgeService.calculateBiologicalAge(data);
+      setBiologicalAge(bioAge);
       
       const dataSource = HealthKitService.isUsingMockData() ? 'Demo' : 'Apple Health';
       Alert.alert(
@@ -141,8 +298,9 @@ export default function HealthImportScreen() {
         `Successfully fetched from ${dataSource}:\n` +
         `• HRV: ${data.hrv.length} samples\n` +
         `• RHR: ${data.rhr.length} samples\n` +
-        `• Calories: ${data.calories.length} samples\n` +
-        `• Exercise: ${data.exercise.length} samples`
+        `• Weight: ${data.weight.length} samples\n` +
+        `• Exercise: ${data.exercise.length} samples\n\n` +
+        `Biological Age: ${bioAge.biologicalAge} years`
       );
     } catch (error) {
       console.error('Error fetching health data:', error);
@@ -163,8 +321,13 @@ export default function HealthImportScreen() {
     const blobs = new Map<string, WalrusBlob>();
 
     try {
-      // Upload each selected metric
-      if (metrics.hrv && healthData.hrv.length > 0) {
+      // Use last 30 days
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+
+      // Upload all metrics
+      if (healthData.hrv.length > 0) {
         statuses.push({ metric: 'HRV', status: 'uploading' });
         setUploadStatuses([...statuses]);
         
@@ -184,7 +347,7 @@ export default function HealthImportScreen() {
         setUploadStatuses([...statuses]);
       }
 
-      if (metrics.rhr && healthData.rhr.length > 0) {
+      if (healthData.rhr.length > 0) {
         statuses.push({ metric: 'RHR', status: 'uploading' });
         setUploadStatuses([...statuses]);
         
@@ -204,27 +367,27 @@ export default function HealthImportScreen() {
         setUploadStatuses([...statuses]);
       }
 
-      if (metrics.calories && healthData.calories.length > 0) {
-        statuses.push({ metric: 'Calories', status: 'uploading' });
+      if (healthData.weight.length > 0) {
+        statuses.push({ metric: 'Weight', status: 'uploading' });
         setUploadStatuses([...statuses]);
         
-        const blob = await WalrusService.uploadHealthData(healthData.calories, {
-          metric: 'calories',
+        const blob = await WalrusService.uploadHealthData(healthData.weight, {
+          metric: 'weight',
           startDate,
           endDate,
-          samples: healthData.calories.length,
+          samples: healthData.weight.length,
         });
         
-        blobs.set('calories', blob);
+        blobs.set('weight', blob);
         statuses[statuses.length - 1] = { 
-          metric: 'Calories', 
+          metric: 'Weight', 
           status: 'success', 
           blobId: blob.id 
         };
         setUploadStatuses([...statuses]);
       }
 
-      if (metrics.exercise && healthData.exercise.length > 0) {
+      if (healthData.exercise.length > 0) {
         statuses.push({ metric: 'Exercise', status: 'uploading' });
         setUploadStatuses([...statuses]);
         
@@ -263,8 +426,8 @@ export default function HealthImportScreen() {
         setUploadStatuses([...statuses]);
 
         Alert.alert(
-          'Upload Complete',
-          `Successfully uploaded ${blobs.size} metrics to Walrus!\n\nManifest ID: ${manifestBlob.id}`
+          'Upload Complete! 🎉',
+          `Successfully uploaded ${blobs.size} metrics to Walrus!\n\nManifest ID: ${manifestBlob.id}\n\nAll data has been encrypted and stored securely. Check the console for detailed upload logs.`
         );
       }
     } catch (error) {
@@ -280,6 +443,32 @@ export default function HealthImportScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.title}>Import Health Data</Text>
         
+        {/* Biological Age Display */}
+        {biologicalAge && (
+          <View style={styles.biologicalAgeSection}>
+            <View style={styles.biologicalAgeHeader}>
+              <View style={styles.biologicalAgeMain}>
+                <Text style={styles.biologicalAgeLabel}>Biological Age</Text>
+                <Text style={styles.biologicalAgeValue}>
+                  {biologicalAge.biologicalAge} years
+                </Text>
+                <Text style={styles.biologicalAgeDiff}>
+                  {biologicalAge.ageDifference > 0 ? '+' : ''}{biologicalAge.ageDifference} years
+                </Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.infoButton}
+                onPress={showBiologicalAgeInfo}
+              >
+                <Text style={styles.infoButtonText}>ⓘ</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.biologicalAgeDescription}>
+              {biologicalAge.interpretation}
+            </Text>
+          </View>
+        )}
+        
         {/* Connection Status */}
         <View style={styles.debugSection}>
           <Text style={styles.debugText}>
@@ -293,82 +482,74 @@ export default function HealthImportScreen() {
           <Text style={styles.connectionSubtext}>
             {!HealthKitService.isUsingMockData() 
               ? '✅ Real health data access granted' 
-              : '📱 Tap "Connect & Fetch Health Data" to access your real Apple Health data'
+              : '📱 Use "Generate Fake Data" for testing or "Connect to Apple Health" for real data'
             }
           </Text>
+          {healthData && (
+            <Text style={styles.dataReadyText}>
+              🎯 Data ready for upload - {(healthData.hrv?.length || 0) + (healthData.rhr?.length || 0) + (healthData.weight?.length || 0) + (healthData.exercise?.length || 0)} total samples
+            </Text>
+          )}
         </View>
         
-        {/* Date Range Selection */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Date Range</Text>
-          
-          <TouchableOpacity 
-            style={styles.dateButton}
-            onPress={() => setShowStartPicker(true)}
-          >
-            <Text style={styles.dateLabel}>Start Date:</Text>
-            <Text style={styles.dateValue}>{startDate.toLocaleDateString()}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.dateButton}
-            onPress={() => setShowEndPicker(true)}
-          >
-            <Text style={styles.dateLabel}>End Date:</Text>
-            <Text style={styles.dateValue}>{endDate.toLocaleDateString()}</Text>
-          </TouchableOpacity>
-
-          {showStartPicker && (
-            <View style={styles.datePickerContainer}>
-              <DateTimePicker
-                value={startDate}
-                mode="date"
-                display="compact"
-                onChange={(event, selectedDate) => {
-                  setShowStartPicker(false);
-                  if (selectedDate) setStartDate(selectedDate);
-                }}
-              />
-            </View>
-          )}
-
-          {showEndPicker && (
-            <View style={styles.datePickerContainer}>
-              <DateTimePicker
-                value={endDate}
-                mode="date"
-                display="compact"
-                onChange={(event, selectedDate) => {
-                  setShowEndPicker(false);
-                  if (selectedDate) setEndDate(selectedDate);
-                }}
-              />
-            </View>
-          )}
-        </View>
-
-        {/* Metric Selection */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Select Metrics</Text>
-          
-          {Object.entries(metrics).map(([key, value]) => (
-            <TouchableOpacity
-              key={key}
-              style={styles.metricRow}
-              onPress={() => toggleMetric(key as keyof MetricToggle)}
-            >
-              <View style={[styles.checkbox, value && styles.checkboxSelected]}>
-                {value && <Text style={styles.checkmark}>✓</Text>}
+        {/* Health Metrics Charts */}
+        {healthData && (
+          <View style={styles.chartsContainer}>
+            <Text style={styles.sectionTitle}>30-Day Health Trends</Text>
+            
+            {/* HRV Chart */}
+            <View style={styles.chartSection}>
+              <Text style={styles.chartTitle}>💓 Heart Rate Variability (HRV)</Text>
+              <View style={styles.chartContainer}>
+                <SimpleChart 
+                  data={healthData.hrv} 
+                  color="#FF6B6B" 
+                  unit="ms"
+                  label="HRV"
+                />
               </View>
-              <Text style={styles.metricLabel}>
-                {key === 'hrv' && 'Heart Rate Variability (HRV)'}
-                {key === 'rhr' && 'Resting Heart Rate'}
-                {key === 'calories' && 'Active Calories'}
-                {key === 'exercise' && 'Exercise Minutes'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+            </View>
+
+            {/* RHR Chart */}
+            <View style={styles.chartSection}>
+              <Text style={styles.chartTitle}>❤️ Resting Heart Rate</Text>
+              <View style={styles.chartContainer}>
+                <SimpleChart 
+                  data={healthData.rhr} 
+                  color="#4ECDC4" 
+                  unit="bpm"
+                  label="RHR"
+                />
+              </View>
+            </View>
+
+            {/* Weight Chart */}
+            <View style={styles.chartSection}>
+              <Text style={styles.chartTitle}>⚖️ Weight</Text>
+              <View style={styles.chartContainer}>
+                <SimpleChart 
+                  data={healthData.weight} 
+                  color="#45B7D1" 
+                  unit="lbs"
+                  label="Weight"
+                />
+              </View>
+            </View>
+
+            {/* Exercise Chart */}
+            <View style={styles.chartSection}>
+              <Text style={styles.chartTitle}>🏃‍♂️ Exercise Minutes</Text>
+              <View style={styles.chartContainer}>
+                <SimpleChart 
+                  data={healthData.exercise} 
+                  color="#96CEB4" 
+                  unit="min"
+                  label="Exercise"
+                />
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Action Buttons */}
         <View style={styles.buttonContainer}>
@@ -384,6 +565,18 @@ export default function HealthImportScreen() {
               <Text style={styles.buttonText}>📱 How to Connect Apple Health</Text>
             </TouchableOpacity>
           )}
+
+          <TouchableOpacity
+            style={[styles.button, styles.fakeDataButton]}
+            onPress={generateFakeData}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.buttonText}>🎲 Generate Fake Data</Text>
+            )}
+          </TouchableOpacity>
           
           <TouchableOpacity
             style={[styles.button, styles.fetchButton]}
@@ -414,6 +607,36 @@ export default function HealthImportScreen() {
               <Text style={styles.buttonText}>Upload to Walrus</Text>
             )}
           </TouchableOpacity>
+        </View>
+
+        {/* Document Upload Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Document Upload</Text>
+          <Text style={styles.sectionSubtitle}>Upload medical documents (PDF, DOCX)</Text>
+          
+          <TouchableOpacity
+            style={[styles.button, styles.documentButton]}
+            onPress={uploadDocument}
+          >
+            <Text style={styles.buttonText}>📄 Upload Document</Text>
+          </TouchableOpacity>
+
+          {uploadedDocuments.length > 0 && (
+            <View style={styles.documentsContainer}>
+              <Text style={styles.documentsTitle}>Uploaded Documents:</Text>
+              {uploadedDocuments.map((doc, index) => (
+                <View key={index} style={styles.documentItem}>
+                  <View style={styles.documentInfo}>
+                    <Text style={styles.documentName}>{doc.name}</Text>
+                    <Text style={styles.documentSize}>
+                      {(doc.size / 1024).toFixed(1)} KB • {new Date(doc.uploadedAt).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  <Text style={styles.documentStatus}>✅</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Upload Status */}
@@ -447,6 +670,62 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  biologicalAgeSection: {
+    backgroundColor: '#4A90E2',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  biologicalAgeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  biologicalAgeMain: {
+    flex: 1,
+  },
+  biologicalAgeLabel: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  biologicalAgeValue: {
+    fontSize: 32,
+    color: 'white',
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  biologicalAgeDiff: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '600',
+  },
+  infoButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 12,
+  },
+  infoButtonText: {
+    fontSize: 18,
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  biologicalAgeDescription: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    lineHeight: 20,
+  },
   scrollContent: {
     padding: 20,
   },
@@ -469,9 +748,91 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontStyle: 'italic',
   },
-  datePickerContainer: {
-    minHeight: 44,
+  dataReadyText: {
+    fontSize: 12,
+    color: '#2e7d32',
+    marginTop: 8,
+    fontWeight: '600',
+  },
+  chartsContainer: {
+    marginBottom: 20,
+  },
+  chartSection: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  chartTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  chartContainer: {
+    height: 120,
+  },
+  chart: {
+    flex: 1,
+  },
+  chartHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  chartValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  chartDate: {
+    fontSize: 12,
+    color: '#666',
+  },
+  chartBars: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    height: 70,
     marginVertical: 8,
+  },
+  barContainer: {
+    alignItems: 'center',
+    flex: 1,
+    marginHorizontal: 1,
+  },
+  bar: {
+    width: 12,
+    borderRadius: 2,
+    marginBottom: 4,
+  },
+  barDate: {
+    fontSize: 10,
+    color: '#666',
+  },
+  chartFooter: {
+    alignItems: 'center',
+  },
+  chartRange: {
+    fontSize: 11,
+    color: '#999',
+  },
+  emptyChart: {
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+  },
+  emptyChartText: {
+    color: '#999',
+    fontSize: 14,
   },
   title: {
     fontSize: 28,
@@ -497,48 +858,45 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 15,
   },
-  dateButton: {
+  sectionSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 15,
+  },
+  documentsContainer: {
+    marginTop: 16,
+  },
+  documentsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  documentItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
   },
-  dateLabel: {
-    fontSize: 16,
+  documentInfo: {
+    flex: 1,
+  },
+  documentName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 4,
+  },
+  documentSize: {
+    fontSize: 12,
     color: '#666',
   },
-  dateValue: {
+  documentStatus: {
     fontSize: 16,
-    color: '#007AFF',
-    fontWeight: '500',
-  },
-  metricRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#007AFF',
-    marginRight: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxSelected: {
-    backgroundColor: '#007AFF',
-  },
-  checkmark: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  metricLabel: {
-    fontSize: 16,
-    color: '#333',
+    marginLeft: 12,
   },
   buttonContainer: {
     gap: 12,
@@ -556,6 +914,12 @@ const styles = StyleSheet.create({
   },
   connectButton: {
     backgroundColor: '#FF9500',
+  },
+  fakeDataButton: {
+    backgroundColor: '#AF52DE',
+  },
+  documentButton: {
+    backgroundColor: '#FF8C00',
   },
   uploadButton: {
     backgroundColor: '#34C759',

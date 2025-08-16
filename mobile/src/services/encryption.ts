@@ -78,7 +78,7 @@ class EncryptionService {
   }
 
   generateManifestId(): string {
-    return `ds_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `ds_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   }
 }
 
