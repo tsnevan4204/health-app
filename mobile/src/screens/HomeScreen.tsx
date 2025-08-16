@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   SafeAreaView,
   Platform,
   Linking,
+  Animated,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 // Removed expo-web-browser import to avoid native module issues
@@ -28,6 +29,61 @@ const STORAGE_KEYS = {
   UPLOAD_STATUSES: '@wellrus_upload_statuses',
   FLOW_TRANSACTIONS: '@wellrus_flow_transactions',
 };
+
+// Animated Glistening Component
+interface GlistenProps {
+  children: React.ReactNode;
+  style?: any;
+}
+
+function Glisten({ children, style }: GlistenProps) {
+  const shimmerValue = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const createShimmerAnimation = () => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerValue, {
+            toValue: 1,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(shimmerValue, {
+            toValue: 0,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    };
+
+    createShimmerAnimation();
+  }, [shimmerValue]);
+
+  const translateX = shimmerValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-100, 100],
+  });
+
+  return (
+    <View style={[style, { overflow: 'hidden' }]}>
+      {children}
+      <Animated.View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(255, 255, 255, 0.3)',
+          transform: [{ translateX }],
+          width: 50,
+          opacity: 0.6,
+        }}
+      />
+    </View>
+  );
+}
 
 // Simple Chart Component
 interface SimpleChartProps {
@@ -501,7 +557,7 @@ export default function HomeScreen() {
     }
 
     try {
-      setUploading(true);
+    setUploading(true);
       console.log('🚀 Starting comprehensive health data upload to Walrus blockchain...');
       
       // Debug: Check healthData structure
@@ -533,7 +589,7 @@ export default function HomeScreen() {
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - 30);
-      
+
       let statuses: UploadStatus[] = [];
       const blobs = new Map<string, WalrusBlob>();
 
@@ -651,21 +707,21 @@ export default function HomeScreen() {
       for (const metric of metricsToUpload) {
         if (metric.data && (Array.isArray(metric.data) ? metric.data.length > 0 : metric.data)) {
           statuses.push({ metric: metric.name, status: 'uploading' });
-          updateUploadStatuses([...statuses]);
-          
+        updateUploadStatuses([...statuses]);
+        
           console.log(`📊 Uploading ${metric.name} to Walrus blockchain...`);
           
           const blob = await WalrusService.uploadHealthData(metric.data, {
             metric: metric.key,
-            startDate,
-            endDate,
+          startDate,
+          endDate,
             samples: Array.isArray(metric.data) ? metric.data.length : 1
           });
           
           blobs.set(metric.key, blob);
           statuses[statuses.length - 1].status = 'success';
           statuses[statuses.length - 1].blobId = blob.id;
-          updateUploadStatuses([...statuses]);
+        updateUploadStatuses([...statuses]);
           
           console.log(`✅ ${metric.name} uploaded to Walrus blockchain: ${blob.id}`);
           console.log(`🔗 View on Walruscan: https://walruscan.com/testnet/blob/${blob.id}`);
@@ -674,8 +730,8 @@ export default function HomeScreen() {
 
       // Step 3: Upload complete comprehensive dataset
       statuses.push({ metric: 'Complete Health Dataset', status: 'uploading' });
-      updateUploadStatuses([...statuses]);
-      
+        updateUploadStatuses([...statuses]);
+        
       console.log('📦 Uploading complete comprehensive health dataset to Walrus blockchain...');
       const completeDatasetBlob = await WalrusService.uploadBlob(
         JSON.stringify(comprehensiveHealthData, null, 2), 
@@ -685,18 +741,18 @@ export default function HomeScreen() {
       blobs.set('complete_dataset', completeDatasetBlob);
       statuses[statuses.length - 1].status = 'success';
       statuses[statuses.length - 1].blobId = completeDatasetBlob.id;
-      updateUploadStatuses([...statuses]);
+        updateUploadStatuses([...statuses]);
       
       console.log(`✅ Complete dataset uploaded to Walrus blockchain: ${completeDatasetBlob.id}`);
 
       // Step 4: Create and upload comprehensive manifest
       statuses.push({ metric: 'Blockchain Manifest', status: 'uploading' });
-      updateUploadStatuses([...statuses]);
-      
+        updateUploadStatuses([...statuses]);
+        
       console.log('📋 Creating blockchain-verifiable manifest...');
       const manifest = await WalrusService.createManifest(blobs, {
-        startDate,
-        endDate,
+          startDate,
+          endDate,
         deviceTypes: ['smartwatch', 'smartphone'],
         userId: 'anon_health_user_' + Math.random().toString(36).substr(2, 12),
       });
@@ -705,7 +761,7 @@ export default function HomeScreen() {
       
       statuses[statuses.length - 1].status = 'success';
       statuses[statuses.length - 1].blobId = manifestBlob.id;
-      updateUploadStatuses([...statuses]);
+        updateUploadStatuses([...statuses]);
 
       // Step 5: Generate blockchain verification instructions
       const blockchainInfo = {
@@ -868,12 +924,12 @@ export default function HomeScreen() {
               console.log('Encrypted:', blockchainInfo.upload_summary.encryption_applied);
               console.log('Blockchain Timestamp:', blockchainInfo.upload_summary.blockchain_timestamp);
               console.log('================================================');
-              
-              Alert.alert(
+
+        Alert.alert(
                 'Complete Verification Info Logged',
                 'All blockchain verification information has been logged to the console. Check the console for:\n\n• Walruscan explorer URLs\n• CLI verification commands\n• API endpoints\n• Individual metric blob IDs\n• Upload summary\n\nUse this information to verify your data on the Walrus blockchain.'
-              );
-            }
+        );
+      }
           }
         ]
       );
@@ -991,28 +1047,7 @@ export default function HomeScreen() {
           </View>
         )}
         
-        {/* Connection Status */}
-        <View style={styles.debugSection}>
-          <Text style={styles.debugText}>
-            {!HealthKitService.isUsingMockData() 
-              ? '🟢 Connected to Apple Health - Real Data' 
-              : isHealthKitAvailable 
-                ? '🟡 Apple Health Available - Mock Data' 
-                : '🔴 Apple Health Unavailable - Mock Data'
-            }
-          </Text>
-          <Text style={styles.connectionSubtext}>
-{!HealthKitService.isUsingMockData() 
-              ? '🍎 Connected to Apple Health - real data available' 
-              : '📱 Mock mode - tap "Generate Mock Data" for testing or "Fetch Real Health Data" to connect'
-            }
-          </Text>
-          {healthData && (
-            <Text style={styles.dataReadyText}>
-              🎯 Data ready for upload - {(healthData.hrv?.length || 0) + (healthData.rhr?.length || 0) + (healthData.weight?.length || 0) + (healthData.exercise?.length || 0)} total samples
-            </Text>
-          )}
-        </View>
+
         
         {/* Health Metrics Charts */}
         {healthData && (
@@ -1073,68 +1108,73 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Action Buttons */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[styles.button, styles.fakeDataButton]}
-            onPress={generateFakeData}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={styles.buttonText}>🎲 Generate Mock Data</Text>
-            )}
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.button, styles.fetchButton]}
-            onPress={() => {
-              console.log('🎯 [BUTTON] Connect to Apple Health button pressed!');
-              console.log('📊 [BUTTON] Button state - loading:', loading, 'isHealthKitAvailable:', isHealthKitAvailable);
-              fetchHealthData();
-            }}
-            disabled={loading || !isHealthKitAvailable}
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={styles.buttonText}>
+        {/* Action Buttons - 2x2 Grid */}
+        <View style={styles.buttonGridContainer}>
+          <View style={styles.buttonRow}>
+            <Glisten style={[styles.gridButton, styles.fakeDataButton]}>
+              <TouchableOpacity
+                style={styles.gridButtonInner}
+                onPress={generateFakeData}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={styles.gridButtonText}>🎲 Generate Mock Data</Text>
+                )}
+              </TouchableOpacity>
+            </Glisten>
+            
+            <Glisten style={[styles.gridButton, styles.fetchButton]}>
+              <TouchableOpacity
+                style={styles.gridButtonInner}
+                onPress={() => {
+                  console.log('🎯 [BUTTON] Connect to Apple Health button pressed!');
+                  console.log('📊 [BUTTON] Button state - loading:', loading, 'isHealthKitAvailable:', isHealthKitAvailable);
+                  fetchHealthData();
+                }}
+                disabled={loading || !isHealthKitAvailable}
+              >
+                {loading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={styles.gridButtonText}>
 {HealthKitService.isUsingMockData() ? '🍎 Connect to Apple Health' : '📊 Fetch Real Health Data'}
-              </Text>
-            )}
-          </TouchableOpacity>
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </Glisten>
+          </View>
 
-          <TouchableOpacity
-            style={[styles.button, styles.uploadButton, !healthData && styles.buttonDisabled]}
-            onPress={uploadToWalrus}
-            disabled={uploading || !healthData}
-          >
-            {uploading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={styles.buttonText}>🐋 Upload All Data to Walrus Blockchain</Text>
-            )}
-          </TouchableOpacity>
+          <View style={styles.buttonRow}>
+            <Glisten style={[styles.gridButton, styles.uploadButton, !healthData && styles.buttonDisabled]}>
+              <TouchableOpacity
+                style={styles.gridButtonInner}
+                onPress={uploadToWalrus}
+                disabled={uploading || !healthData}
+              >
+                {uploading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={styles.gridButtonText}>🐋 Upload to Walrus</Text>
+                )}
+              </TouchableOpacity>
+            </Glisten>
 
-          <TouchableOpacity
-            style={[styles.button, styles.viewBlockchainButton]}
-            onPress={viewBlockchainData}
-          >
-            <Text style={styles.buttonText}>🔍 View Data on Blockchain</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, styles.flowButton, !healthData && styles.buttonDisabled]}
-            onPress={mintHealthDataNFT}
-            disabled={mintingNFT || !healthData}
-          >
-            {mintingNFT ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={styles.buttonText}>🌊 Mint Flow NFT</Text>
-            )}
-          </TouchableOpacity>
+            <Glisten style={[styles.gridButton, styles.flowButton, !healthData && styles.buttonDisabled]}>
+              <TouchableOpacity
+                style={styles.gridButtonInner}
+                onPress={mintHealthDataNFT}
+                disabled={mintingNFT || !healthData}
+              >
+                {mintingNFT ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={styles.gridButtonText}>🌊 Mint Flow NFT</Text>
+                )}
+              </TouchableOpacity>
+            </Glisten>
+          </View>
         </View>
 
         {/* Flow Blockchain Section */}
@@ -1478,14 +1518,16 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 20,
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 239, 139, 0.2)',
   },
   documentSection: {
     marginTop: 30,
@@ -1539,6 +1581,48 @@ const styles = StyleSheet.create({
   buttonContainer: {
     gap: 12,
   },
+  buttonGridContainer: {
+    marginVertical: 20,
+    paddingHorizontal: 8,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 12,
+  },
+  gridButton: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    minHeight: 80,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  gridButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  gridButtonInner: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+  },
   button: {
     backgroundColor: '#007AFF',
     borderRadius: 12,
@@ -1554,7 +1638,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF9500',
   },
   fakeDataButton: {
-    backgroundColor: '#AF52DE',
+    backgroundColor: '#FF6B6B',
   },
   documentButton: {
     backgroundColor: '#FF8C00',
@@ -1563,7 +1647,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#34C759',
   },
   flowButton: {
-    backgroundColor: '#00EF8B',
+    backgroundColor: '#00D2FF',
   },
   viewBlockchainButton: {
     backgroundColor: '#6366f1',

@@ -56,17 +56,17 @@ export default function App() {
         <Tab.Screen 
           name="Home" 
           component={HomeScreen}
-          options={{ title: 'Wellrus' }}
+          options={{ title: '🏠 Fitcentive' }}
         />
         <Tab.Screen 
           name="Ask" 
           component={AskScreen}
-          options={{ title: 'Ask AI' }}
+          options={{ title: '💬 Ask AI' }}
         />
         <Tab.Screen 
           name="Sell" 
           component={SellScreen}
-          options={{ title: 'Sell Data' }}
+          options={{ title: '💰 Sell Data' }}
         />
       </Tab.Navigator>
     </NavigationContainer>
