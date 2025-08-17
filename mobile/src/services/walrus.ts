@@ -121,7 +121,7 @@ class WalrusService {
           {
             headers: {
               'Content-Type': 'application/octet-stream',
-              'User-Agent': 'Wellrus-Health-App/1.0',
+              'User-Agent': 'Fitcentive-Health-App/1.0',
             },
             maxBodyLength: Infinity,
             maxContentLength: Infinity,

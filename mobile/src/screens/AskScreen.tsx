@@ -12,8 +12,6 @@ import {
   Alert,
 } from 'react-native';
 import { useRoute, RouteProp } from '@react-navigation/native';
-import * as DocumentPicker from 'expo-document-picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import LocalAIService from '../services/localAI';
 
 interface Message {
@@ -46,7 +44,6 @@ export default function AskScreen() {
   ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<any>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Initialize AI service and handle initial question
@@ -71,52 +68,6 @@ export default function AskScreen() {
     initializeAI();
   }, [route.params?.initialQuestion]);
 
-  const handleFileUpload = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['text/plain', 'application/pdf'],
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const file = result.assets[0];
-        setUploadedFile(file);
-        
-        // Add message with file attachment
-        const fileMessage: Message = {
-          id: Date.now().toString(),
-          text: `📎 Uploaded: ${file.name}`,
-          isUser: true,
-          timestamp: new Date(),
-          attachment: {
-            name: file.name,
-            type: file.mimeType || 'unknown',
-            size: file.size || 0,
-          },
-        };
-
-        setMessages(prev => [...prev, fileMessage]);
-        setIsTyping(true);
-
-        // AI response for file upload
-        setTimeout(() => {
-          const aiResponse = `I've received your file "${file.name}". I can help analyze document content, answer questions about the information, or provide insights based on the data. What would you like to know about this document?`;
-          const aiMessage: Message = {
-            id: (Date.now() + 1).toString(),
-            text: aiResponse,
-            isUser: false,
-            timestamp: new Date(),
-          };
-
-          setMessages(prev => [...prev, aiMessage]);
-          setIsTyping(false);
-        }, 1500);
-      }
-    } catch (error) {
-      Alert.alert('Upload Error', 'Failed to upload file. Please try again.');
-    }
-  };
 
   const sendMessage = async (messageText?: string) => {
     const text = messageText || inputText.trim();
@@ -233,12 +184,6 @@ export default function AskScreen() {
 
         {/* Input */}
         <View style={styles.inputContainer}>
-          <TouchableOpacity
-            style={styles.uploadButton}
-            onPress={handleFileUpload}
-          >
-            <Text style={styles.uploadButtonText}>📎</Text>
-          </TouchableOpacity>
           <TextInput
             style={styles.textInput}
             value={inputText}
@@ -397,20 +342,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
     fontSize: 16,
-  },
-  uploadButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 20,
-    marginRight: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 44,
-  },
-  uploadButtonText: {
-    fontSize: 18,
-    color: 'white',
   },
   attachmentInfo: {
     marginTop: 8,

@@ -204,23 +204,23 @@ class HealthKitService {
 
       switch (metric) {
         case 'hrv':
-          value = Math.floor(Math.random() * 30) + 40; // 40-70ms
+          value = Math.floor(Math.random() * 25) + 45; // 45-70ms (higher for young adults)
           unit = 'ms';
           break;
         case 'rhr':
-          value = Math.floor(Math.random() * 20) + 50; // 50-70 bpm
+          value = Math.floor(Math.random() * 15) + 55; // 55-70 bpm (good range for young adults)
           unit = 'bpm';
           break;
         case 'active_calories':
-          value = Math.floor(Math.random() * 500) + 200; // 200-700 kcal
+          value = Math.floor(Math.random() * 400) + 300; // 300-700 kcal (more active young adults)
           unit = 'kcal';
           break;
         case 'exercise_minutes':
-          value = Math.floor(Math.random() * 60) + 10; // 10-70 min
+          value = Math.floor(Math.random() * 50) + 20; // 20-70 min (active lifestyle)
           unit = 'min';
           break;
         case 'weight':
-          value = Math.floor(Math.random() * 40) + 140; // 140-180 lbs
+          value = Math.floor(Math.random() * 30) + 130; // 130-160 lbs (healthy weight for 18-25)
           unit = 'lbs';
           break;
         default:

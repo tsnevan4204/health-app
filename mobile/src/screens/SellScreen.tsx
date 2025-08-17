@@ -8,16 +8,37 @@ import {
   SafeAreaView,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import HederaBlockchainService from '../services/hederaBlockchain';
 import HealthNFTService, { HealthBountyNFT } from '../services/healthNFTService';
+import WalrusService from '../services/walrus';
+
+// Helper function to map display metric names to actual data keys
+const mapMetricToDataKey = (metric: string): string => {
+  const mappings: { [key: string]: string } = {
+    'HRV': 'hrv',
+    'Heart Rate Variability': 'hrv',
+    'Stress Level': 'stress',
+    'Sleep Quality': 'sleep',
+    'Exercise Minutes': 'exercise',
+    'Heart Rate Recovery': 'hr_recovery',
+    'RHR': 'rhr',
+    'Resting Heart Rate': 'rhr',
+    'Weight': 'weight',
+    'Exercise': 'exercise',
+    'Biological Age': 'biologicalAge',
+    'Exercise Performance': 'exercise_performance'
+  };
+  
+  return mappings[metric] || metric.toLowerCase();
+};
 
 export default function SellScreen() {
-
-
-
   const [healthBounties, setHealthBounties] = useState<HealthBountyNFT[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingBountyId, setLoadingBountyId] = useState<string | null>(null);
   
   // Load health bounties on component mount
   React.useEffect(() => {
@@ -52,7 +73,7 @@ export default function SellScreen() {
   const submitToBounty = async (bounty: HealthBountyNFT) => {
     Alert.alert(
       bounty.title,
-      `${bounty.description}\n\nRequired metrics: ${bounty.requiredMetrics.join(', ')}\nReward: $${bounty.rewardAmount} USD\nDeadline: ${bounty.deadline.toLocaleDateString()}\nParticipants: ${bounty.participants}\n\nSubmitting will:\n• Encrypt your health data\n• Remove all personal information\n• Upload to secure storage\n• Receive payment upon acceptance`,
+      `${bounty.description}\n\nRequired metrics: ${bounty.requiredMetrics.join(', ')}\nReward: $${bounty.rewardAmount} USD\nAddress: ${bounty.addressDisplay}\nParticipants: ${bounty.participants}\n\nSubmitting will:\n• Encrypt your health data\n• Remove all personal information\n• Upload to secure storage\n• Receive test HBAR payment`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -60,28 +81,140 @@ export default function SellScreen() {
           onPress: async () => {
             try {
               setLoading(true);
+              setLoadingBountyId(bounty.id);
+              console.log(`📤 Submitting data to bounty: ${bounty.title}`);
               
-              // Initialize Hedera service
+              // Load health data from storage
+              const healthDataStr = await AsyncStorage.getItem('@fitcentive_health_data');
+              if (!healthDataStr) {
+                Alert.alert('Error', 'No health data available. Please generate or fetch health data first.');
+                return;
+              }
+              
+              const healthData = JSON.parse(healthDataStr);
+              console.log('📊 Health data loaded:', Object.keys(healthData));
+              
+              // Filter data to only include required metrics for this bounty
+              const filteredData: any = {};
+              for (const metric of bounty.requiredMetrics) {
+                // Map display names to actual data keys
+                const dataKey = mapMetricToDataKey(metric);
+                if (healthData[dataKey]) {
+                  filteredData[dataKey] = healthData[dataKey];
+                }
+              }
+              
+              console.log('🎯 Filtered data for bounty:', Object.keys(filteredData));
+              
+              // Anonymize the data (remove personal information)
+              const anonymizedData = await HealthNFTService.generateAnonymizedBundle(filteredData);
+              console.log('🔒 Data anonymized for submission');
+              
+              // Upload anonymized data to Walrus
+              const dataBlob = await WalrusService.uploadBlob(
+                JSON.stringify(anonymizedData.anonymizedData),
+                true // encrypted
+              );
+              console.log('📦 Data uploaded to Walrus:', dataBlob.id);
+              
+              // Initialize Hedera service and send test HBAR
               await HederaBlockchainService.initialize();
               
-              // Simulate submission to research study
+              // Generate simulated Hedera transaction ID for NFT transfer (proper format: accountId@timestamp.nanoseconds)
+              const accountId = Math.floor(Math.random() * 1000000) + 1000;
+              const timestamp = Math.floor(Date.now() / 1000);
+              const nanoseconds = Math.floor(Math.random() * 999999999);
+              const hederaTransactionId = `0.0.${accountId}@${timestamp}.${nanoseconds}`;
+              const nftTokenId = `0.0.${Math.floor(Math.random() * 100000)}`;
+              
+              // Simulate sending test HBAR (in a real implementation, this would be done by the bounty provider)
+              console.log(`💰 Simulating test HBAR payment to user wallet`);
+              console.log(`📨 Data sent to address: ${bounty.address}`);
+              console.log(`🎨 NFT Token ID: ${nftTokenId}`);
+              console.log(`🔗 Hedera Transaction: ${hederaTransactionId}`);
+              
+              // Update wallet balance in storage
+              try {
+                const currentBalanceStr = await AsyncStorage.getItem('@fitcentive_wallet_balance');
+                const currentBalance = currentBalanceStr ? parseFloat(currentBalanceStr) : 100.0;
+                const newBalance = currentBalance + bounty.rewardAmount;
+                await AsyncStorage.setItem('@fitcentive_wallet_balance', newBalance.toString());
+                console.log(`💰 Updated wallet balance: ${newBalance} HBAR`);
+                
+                // Add transaction record
+                const transactions = [];
+                const existingTransactionsStr = await AsyncStorage.getItem('@fitcentive_wallet_transactions');
+                if (existingTransactionsStr) {
+                  transactions.push(...JSON.parse(existingTransactionsStr));
+                }
+                
+                transactions.unshift({
+                  id: Date.now().toString(),
+                  type: 'received',
+                  amount: bounty.rewardAmount,
+                  from: `${bounty.title} Bounty`,
+                  timestamp: new Date().toISOString(),
+                  description: `Reward for submitting ${bounty.requiredMetrics.join(', ')} data`,
+                  hederaTransactionId: hederaTransactionId,
+                  nftTokenId: nftTokenId,
+                  walrusBlobId: dataBlob.id
+                });
+                
+                await AsyncStorage.setItem('@fitcentive_wallet_transactions', JSON.stringify(transactions));
+                console.log(`📝 Added transaction record for ${bounty.rewardAmount} HBAR`);
+              } catch (walletError) {
+                console.error('❌ Error updating wallet:', walletError);
+              }
               
               Alert.alert(
-                'Data Submitted Successfully! ✅',
-                `Your health data has been submitted to the research study.\n\n` +
-                `Study: ${bounty.title}\n` +
-                `Reward: $${bounty.rewardAmount} USD\n` +
-                `Status: Under Review\n\n` +
-                `You will receive payment once the data is accepted by the research team.`,
+                'Data Submitted Successfully',
+                `Your anonymized health data has been submitted to ${bounty.title} study. You will receive ${bounty.rewardAmount} test HBAR as reward.`,
                 [
+                  {
+                    text: 'View Walrus Data',
+                    onPress: () => {
+                      console.log(`🔗 Opening Walruscan for blob: ${dataBlob.id}`);
+                      const walruscanUrl = `https://walruscan.com/testnet/blob/${dataBlob.id}`;
+                      Linking.canOpenURL(walruscanUrl).then(supported => {
+                        if (supported) {
+                          Linking.openURL(walruscanUrl);
+                        } else {
+                          Alert.alert(
+                            'Walrus Data Explorer',
+                            `View your submitted data on Walrus blockchain at walruscan.com. Copy this URL: ${walruscanUrl}`,
+                            [{ text: 'OK' }]
+                          );
+                        }
+                      });
+                    }
+                  },
+                  {
+                    text: 'View Hedera NFT',
+                    onPress: () => {
+                      console.log(`🔗 Opening Hedera HashScan for transaction: ${hederaTransactionId}`);
+                      const hashscanUrl = `https://hashscan.io/testnet/transaction/${hederaTransactionId}`;
+                      Linking.canOpenURL(hashscanUrl).then(supported => {
+                        if (supported) {
+                          Linking.openURL(hashscanUrl);
+                        } else {
+                          Alert.alert(
+                            'Hedera NFT Transaction',
+                            `View transaction ${hederaTransactionId} on HashScan. NFT Token: ${nftTokenId}`,
+                            [{ text: 'OK' }]
+                          );
+                        }
+                      });
+                    }
+                  },
                   { text: 'OK', style: 'default' }
                 ]
               );
             } catch (error) {
               console.error('Error submitting to bounty:', error);
-              Alert.alert('Error', 'Failed to submit data to bounty');
+              Alert.alert('Error', 'Failed to submit data to bounty: ' + error.message);
             } finally {
               setLoading(false);
+              setLoadingBountyId(null);
             }
           }
         }
@@ -89,54 +222,66 @@ export default function SellScreen() {
     );
   };
 
-  const BountyCard = ({ bounty }: { bounty: HealthBountyNFT }) => (
-    <View style={[styles.packageCard, styles.bountyCard]}>
-      <View style={styles.packageHeader}>
-        <View style={styles.packageInfo}>
-          <Text style={styles.packageTitle}>{bounty.title}</Text>
-          <View style={[styles.rarityBadge, { backgroundColor: getRarityColor(bounty.rarity) }]}>
-            <Text style={styles.rarityText}>{bounty.rarity}</Text>
+  const BountyCard = ({ bounty }: { bounty: HealthBountyNFT }) => {
+    const isLoading = loadingBountyId === bounty.id;
+    
+    return (
+      <View style={[styles.packageCard, styles.bountyCard]}>
+        <View style={styles.packageHeader}>
+          <View style={styles.packageInfo}>
+            <Text style={styles.packageTitle}>{bounty.title}</Text>
+            <View style={[styles.rarityBadge, { backgroundColor: getRarityColor(bounty.rarity) }]}>
+              <Text style={styles.rarityText}>{bounty.rarity}</Text>
+            </View>
+          </View>
+          <View style={styles.priceContainer}>
+            <Text style={styles.price}>${bounty.rewardAmount}</Text>
+            <Text style={styles.currency}>USD</Text>
           </View>
         </View>
-        <View style={styles.priceContainer}>
-          <Text style={styles.price}>${bounty.rewardAmount}</Text>
-          <Text style={styles.currency}>USD</Text>
+        
+        <Text style={styles.packageDescription}>{bounty.description}</Text>
+        
+        <View style={styles.bountyStats}>
+          <View style={styles.stat}>
+            <Text style={styles.statLabel}>Participants</Text>
+            <Text style={styles.statValue}>{bounty.participants}</Text>
+          </View>
+          <View style={styles.stat}>
+            <Text style={styles.statLabel}>Address</Text>
+            <Text style={styles.statValue}>{bounty.addressDisplay}</Text>
+          </View>
+          <View style={styles.stat}>
+            <Text style={styles.statLabel}>Category</Text>
+            <Text style={styles.statValue}>{bounty.category}</Text>
+          </View>
         </View>
-      </View>
-      
-      <Text style={styles.packageDescription}>{bounty.description}</Text>
-      
-      <View style={styles.bountyStats}>
-        <View style={styles.stat}>
-          <Text style={styles.statLabel}>Participants</Text>
-          <Text style={styles.statValue}>{bounty.participants}</Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={styles.statLabel}>Deadline</Text>
-          <Text style={styles.statValue}>{bounty.deadline.toLocaleDateString()}</Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={styles.statLabel}>Category</Text>
-          <Text style={styles.statValue}>{bounty.category}</Text>
-        </View>
-      </View>
 
-      <View style={styles.metricsContainer}>
-        <Text style={styles.metricsLabel}>Required Metrics:</Text>
-        <View style={styles.metricsRow}>
-          {bounty.requiredMetrics.map((metric, index) => (
-            <View key={`metric-${index}`} style={styles.metricTag}>
-              <Text style={styles.metricText}>{metric}</Text>
-            </View>
-          ))}
+        <View style={styles.metricsContainer}>
+          <Text style={styles.metricsLabel}>Required Metrics:</Text>
+          <View style={styles.metricsRow}>
+            {bounty.requiredMetrics.map((metric, index) => (
+              <View key={`metric-${index}`} style={styles.metricTag}>
+                <Text style={styles.metricText}>{metric}</Text>
+              </View>
+            ))}
+          </View>
         </View>
-      </View>
 
-      <TouchableOpacity style={styles.submitButton} onPress={() => submitToBounty(bounty)}>
-        <Text style={styles.submitButtonText}>🎯 Submit Data</Text>
-      </TouchableOpacity>
-    </View>
-  );
+        <TouchableOpacity 
+          style={[styles.submitButton, isLoading && styles.submitButtonDisabled]} 
+          onPress={() => submitToBounty(bounty)}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="white" size="small" />
+          ) : (
+            <Text style={styles.submitButtonText}>🎯 Submit Data</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -399,6 +544,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  submitButtonDisabled: {
+    opacity: 0.7,
+    backgroundColor: '#999',
   },
   submitButtonText: {
     color: 'white',

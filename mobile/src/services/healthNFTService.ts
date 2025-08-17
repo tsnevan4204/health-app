@@ -10,7 +10,8 @@ export interface HealthBountyNFT {
   rewardAmount: number;
   currency: string;
   bountyProvider: string;
-  deadline: Date;
+  address: string; // Full address where data is sent
+  addressDisplay: string; // First 5 digits for display
   participants: number;
   rarity: 'Common' | 'Rare' | 'Epic' | 'Legendary';
   category: string;
@@ -137,7 +138,7 @@ class HealthNFTService {
         description: bountyData.description,
         requiredMetrics: bountyData.requiredMetrics,
         rewardAmount: bountyData.rewardAmount,
-        deadline: bountyData.deadline.toISOString(),
+        address: bountyData.address || '0.0.12345678901234567890123456789012345678',
         category: bountyData.category,
         rarity,
         anonymizationApplied: true,
@@ -164,7 +165,8 @@ class HealthNFTService {
         rewardAmount: bountyData.rewardAmount,
         currency: 'FLOW',
         bountyProvider: anonymizedBountyData.pseudonymousId,
-        deadline: bountyData.deadline,
+        address: bountyData.address || '0.0.12345678901234567890123456789012345678',
+        addressDisplay: (bountyData.address || '0.0.12345678901234567890123456789012345678').substring(0, 7),
         participants: 0,
         rarity,
         category: bountyData.category,
@@ -299,8 +301,13 @@ class HealthNFTService {
 
   // Get predefined health bounties for the marketplace
   getPredefinedHealthBounties(): HealthBountyNFT[] {
-    const now = new Date();
-    const futureDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
+    // Generate sample Hedera addresses
+    const addresses = [
+      '0.0.12345678901234567890123456789012345678',
+      '0.0.98765432109876543210987654321098765432',
+      '0.0.11223344556677889900112233445566778899',
+      '0.0.55667788990011223344556677889900112233'
+    ];
     
     return [
       {
@@ -311,7 +318,8 @@ class HealthNFTService {
         rewardAmount: 75.0,
         currency: 'FLOW',
         bountyProvider: this.generatePseudonymousId(),
-        deadline: futureDate,
+        address: addresses[0],
+        addressDisplay: addresses[0].substring(0, 7), // First 5 digits plus "0.0."
         participants: 12,
         rarity: 'Epic',
         category: 'Mental Health Research',
@@ -325,7 +333,8 @@ class HealthNFTService {
         rewardAmount: 120.0,
         currency: 'FLOW',
         bountyProvider: this.generatePseudonymousId(),
-        deadline: futureDate,
+        address: addresses[1],
+        addressDisplay: addresses[1].substring(0, 7),
         participants: 8,
         rarity: 'Legendary',
         category: 'Sports Science',
@@ -339,7 +348,8 @@ class HealthNFTService {
         rewardAmount: 150.0,
         currency: 'FLOW',
         bountyProvider: this.generatePseudonymousId(),
-        deadline: futureDate,
+        address: addresses[2],
+        addressDisplay: addresses[2].substring(0, 7),
         participants: 5,
         rarity: 'Legendary',
         category: 'Longevity Research',
@@ -353,7 +363,8 @@ class HealthNFTService {
         rewardAmount: 45.0,
         currency: 'FLOW',
         bountyProvider: this.generatePseudonymousId(),
-        deadline: futureDate,
+        address: addresses[3],
+        addressDisplay: addresses[3].substring(0, 7),
         participants: 15,
         rarity: 'Rare',
         category: 'Sleep Research',

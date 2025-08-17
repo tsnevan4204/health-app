@@ -24,6 +24,10 @@ interface DocumentData {
   uploadedAt: string;
 }
 
+// Ollama API configuration for lightweight open-source models
+const OLLAMA_BASE_URL = 'http://localhost:11434/api'; // Local Ollama instance
+const MODEL_NAME = 'llama3.2:3b'; // Lightweight 3B parameter model for quick responses
+
 class LocalAIService {
   private healthData: HealthData | null = null;
   private biologicalAge: BiologicalAgeData | null = null;
@@ -32,17 +36,17 @@ class LocalAIService {
   async initialize() {
     // Load health data from storage
     try {
-      const storedHealthData = await AsyncStorage.getItem('@wellrus_health_data');
+      const storedHealthData = await AsyncStorage.getItem('@fitcentive_health_data');
       if (storedHealthData) {
         this.healthData = JSON.parse(storedHealthData);
       }
 
-      const storedBiologicalAge = await AsyncStorage.getItem('@wellrus_biological_age');
+      const storedBiologicalAge = await AsyncStorage.getItem('@fitcentive_biological_age');
       if (storedBiologicalAge) {
         this.biologicalAge = JSON.parse(storedBiologicalAge);
       }
 
-      const storedDocuments = await AsyncStorage.getItem('@wellrus_uploaded_documents');
+      const storedDocuments = await AsyncStorage.getItem('@fitcentive_uploaded_documents');
       if (storedDocuments) {
         this.documents = JSON.parse(storedDocuments);
       }
@@ -54,6 +58,179 @@ class LocalAIService {
   }
 
   async generateResponse(userMessage: string): Promise<string> {
+    try {
+      // Prepare the user's actual health data for AI analysis
+      const healthContext = await this.prepareHealthContext();
+      const documentContext = await this.prepareDocumentContext();
+      
+      // Create a comprehensive prompt with real user data
+      const systemPrompt = `You are a knowledgeable health AI assistant analyzing real user health data. 
+You must provide specific, personalized recommendations based on the actual data provided.
+
+USER'S HEALTH DATA:
+${healthContext}
+
+UPLOADED DOCUMENTS:
+${documentContext}
+
+INSTRUCTIONS:
+- Analyze the ACTUAL data values, not generic ranges
+- Provide specific recommendations based on trends you see
+- Reference specific numbers from their data
+- If biological age differs from chronological age, explain what this means for their specific case
+- For documents, extract and analyze key health information
+- Be concise but specific
+- Focus on actionable insights
+- NEVER use emojis or asterisks for formatting
+- Use plain text only with clear structure
+
+USER QUESTION: ${userMessage}`;
+
+      // Call Ollama API with real health data
+      const response = await this.callOllamaAPI(systemPrompt, userMessage);
+      return response || this.generateFallbackResponse(userMessage);
+    } catch (error) {
+      console.error('❌ AI API error:', error);
+      // Fallback to data-driven analysis if API fails
+      return this.generateDataDrivenResponse(userMessage);
+    }
+  }
+
+  private async prepareHealthContext(): Promise<string> {
+    let context = "=== USER'S ACTUAL HEALTH METRICS ===\n";
+    
+    if (this.biologicalAge) {
+      context += `BIOLOGICAL AGE: ${this.biologicalAge.biologicalAge} years (chronological: ${this.biologicalAge.chronologicalAge})\n`;
+      context += `AGE DIFFERENCE: ${this.biologicalAge.ageDifference > 0 ? '+' : ''}${this.biologicalAge.ageDifference} years\n`;
+      context += `INTERPRETATION: ${this.biologicalAge.interpretation}\n\n`;
+    }
+
+    if (this.healthData?.hrv && this.healthData.hrv.length > 0) {
+      const hrvValues = this.healthData.hrv.map(d => d.value);
+      const avgHRV = hrvValues.reduce((sum, val) => sum + val, 0) / hrvValues.length;
+      const recentHRV = hrvValues.slice(-7);
+      const recentAvg = recentHRV.reduce((sum, val) => sum + val, 0) / recentHRV.length;
+      const trend = this.calculateTrend(hrvValues.slice(-14));
+      
+      context += `HRV DATA (${hrvValues.length} measurements):\n`;
+      context += `- Overall average: ${avgHRV.toFixed(1)}ms\n`;
+      context += `- Recent 7-day average: ${recentAvg.toFixed(1)}ms\n`;
+      context += `- 14-day trend: ${trend > 1 ? 'improving' : trend < -1 ? 'declining' : 'stable'}\n`;
+      context += `- Latest values: ${recentHRV.slice(-3).map(v => v.toFixed(1)).join(', ')}ms\n\n`;
+    }
+
+    if (this.healthData?.rhr && this.healthData.rhr.length > 0) {
+      const rhrValues = this.healthData.rhr.map(d => d.value);
+      const avgRHR = rhrValues.reduce((sum, val) => sum + val, 0) / rhrValues.length;
+      const recentRHR = rhrValues.slice(-7);
+      const recentAvg = recentRHR.reduce((sum, val) => sum + val, 0) / recentRHR.length;
+      const trend = this.calculateTrend(rhrValues.slice(-14));
+      
+      context += `RESTING HEART RATE (${rhrValues.length} measurements):\n`;
+      context += `- Overall average: ${avgRHR.toFixed(1)} bpm\n`;
+      context += `- Recent 7-day average: ${recentAvg.toFixed(1)} bpm\n`;
+      context += `- 14-day trend: ${trend < -1 ? 'improving (decreasing)' : trend > 1 ? 'increasing' : 'stable'}\n`;
+      context += `- Latest values: ${recentRHR.slice(-3).map(v => v.toFixed(1)).join(', ')} bpm\n\n`;
+    }
+
+    if (this.healthData?.exercise && this.healthData.exercise.length > 0) {
+      const exerciseValues = this.healthData.exercise.map(d => d.value);
+      const totalMinutes = exerciseValues.reduce((sum, val) => sum + val, 0);
+      const avgDaily = totalMinutes / exerciseValues.length;
+      const weeklyProjection = avgDaily * 7;
+      const recentWeek = exerciseValues.slice(-7);
+      const recentAvg = recentWeek.reduce((sum, val) => sum + val, 0) / recentWeek.length;
+      
+      context += `EXERCISE DATA (${exerciseValues.length} days):\n`;
+      context += `- Total minutes recorded: ${totalMinutes.toFixed(0)}\n`;
+      context += `- Average daily: ${avgDaily.toFixed(1)} minutes\n`;
+      context += `- Weekly projection: ${weeklyProjection.toFixed(0)} minutes\n`;
+      context += `- Recent 7-day average: ${recentAvg.toFixed(1)} minutes\n`;
+      context += `- Latest values: ${recentWeek.slice(-3).map(v => v.toFixed(1)).join(', ')} minutes\n\n`;
+    }
+
+    if (this.healthData?.weight && this.healthData.weight.length > 0) {
+      const weightValues = this.healthData.weight.map(d => d.value);
+      const currentWeight = weightValues[weightValues.length - 1];
+      const avgWeight = weightValues.reduce((sum, val) => sum + val, 0) / weightValues.length;
+      const trend = this.calculateTrend(weightValues.slice(-30));
+      
+      context += `WEIGHT DATA (${weightValues.length} measurements):\n`;
+      context += `- Current weight: ${currentWeight.toFixed(1)} lbs\n`;
+      context += `- Average weight: ${avgWeight.toFixed(1)} lbs\n`;
+      context += `- 30-day trend: ${Math.abs(trend) < 0.5 ? 'stable' : trend > 0 ? `+${trend.toFixed(1)} lbs` : `${trend.toFixed(1)} lbs`}\n`;
+      context += `- Weight range: ${Math.min(...weightValues).toFixed(1)} - ${Math.max(...weightValues).toFixed(1)} lbs\n\n`;
+    }
+
+    if (!this.healthData || (!this.healthData.hrv && !this.healthData.rhr && !this.healthData.exercise && !this.healthData.weight)) {
+      context += "NO HEALTH DATA AVAILABLE - User needs to generate or sync health data first.\n\n";
+    }
+
+    return context;
+  }
+
+  private async prepareDocumentContext(): Promise<string> {
+    if (this.documents.length === 0) {
+      return "NO UPLOADED DOCUMENTS\n\n";
+    }
+
+    let context = "=== UPLOADED DOCUMENTS ===\n";
+    this.documents.forEach((doc, index) => {
+      context += `${index + 1}. ${doc.name} (uploaded: ${new Date(doc.uploadedAt).toLocaleDateString()})\n`;
+      if (doc.content) {
+        context += `   Content preview: ${doc.content.substring(0, 200)}...\n`;
+      }
+      if (doc.blobId) {
+        context += `   Stored on blockchain: ${doc.blobId}\n`;
+      }
+    });
+    context += "\n";
+    return context;
+  }
+
+  private async callOllamaAPI(systemPrompt: string, userMessage: string): Promise<string | null> {
+    try {
+      console.log('🤖 Calling Ollama API for health analysis...');
+      
+      const response = await fetch(`${OLLAMA_BASE_URL}/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: MODEL_NAME,
+          prompt: systemPrompt,
+          system: "You are a health analysis AI. Always reference specific data values from the user's actual health metrics. Be concise and actionable. Never use emojis or asterisks for formatting. Use plain text only.",
+          stream: false,
+          options: {
+            temperature: 0.3, // Lower temperature for more consistent medical advice
+            top_p: 0.9,
+            max_tokens: 500, // Keep responses concise
+          }
+        }),
+        timeout: 15000, // 15 second timeout
+      });
+
+      if (!response.ok) {
+        console.log('⚠️ Ollama API not available, falling back to data analysis');
+        return null;
+      }
+
+      const data = await response.json();
+      console.log('✅ Received AI response from Ollama');
+      return data.response;
+    } catch (error) {
+      console.log('⚠️ Ollama connection failed, using fallback analysis:', error.message);
+      return null;
+    }
+  }
+
+  private generateFallbackResponse(userMessage: string): string {
+    // If AI API fails, provide smart data-driven response
+    return this.generateDataDrivenResponse(userMessage);
+  }
+
+  private generateDataDrivenResponse(userMessage: string): string {
     const lowerMessage = userMessage.toLowerCase();
     
     // Document explanation requests
@@ -203,20 +380,66 @@ class LocalAIService {
       return "I don't have your biological age data yet. Please generate health data first, then I can provide detailed biological age analysis.";
     }
 
-    let analysis = `🧬 **Your Biological Age Analysis:**\n\n`;
-    analysis += `• **Biological Age:** ${this.biologicalAge.biologicalAge} years\n`;
-    analysis += `• **Chronological Age:** ${this.biologicalAge.chronologicalAge} years\n`;
-    analysis += `• **Difference:** ${this.biologicalAge.ageDifference > 0 ? '+' : ''}${this.biologicalAge.ageDifference} years\n\n`;
-    analysis += `**Interpretation:** ${this.biologicalAge.interpretation}\n\n`;
+    let analysis = `Your Biological Age Analysis:\n\n`;
+    analysis += `Biological Age: ${this.biologicalAge.biologicalAge} years\n`;
+    analysis += `Chronological Age: ${this.biologicalAge.chronologicalAge} years\n`;
+    analysis += `Difference: ${this.biologicalAge.ageDifference > 0 ? '+' : ''}${this.biologicalAge.ageDifference} years\n\n`;
+    
+    // Provide specific interpretation based on actual age difference
+    if (this.biologicalAge.ageDifference < -2) {
+      analysis += `Excellent Health Status: Your biological age is ${Math.abs(this.biologicalAge.ageDifference)} years younger than your chronological age of ${this.biologicalAge.chronologicalAge}. This indicates exceptional health habits and physiological function for someone in their early twenties.\n\n`;
+    } else if (this.biologicalAge.ageDifference < 0) {
+      analysis += `Good Health: Your biological age is ${Math.abs(this.biologicalAge.ageDifference)} years younger, suggesting your body is functioning well for your age group (18-25).\n\n`;
+    } else if (this.biologicalAge.ageDifference <= 1) {
+      analysis += `Age-Appropriate Health: Your biological age aligns closely with your chronological age, which is normal for someone ${this.biologicalAge.chronologicalAge} years old.\n\n`;
+    } else {
+      analysis += `Opportunity for Improvement: At ${this.biologicalAge.chronologicalAge} years old, your biological age being ${this.biologicalAge.ageDifference} years older suggests specific areas to focus on.\n\n`;
+    }
+    
+    // Add specific recommendations based on age and contributing factors
+    analysis += `Specific Recommendations for Age ${this.biologicalAge.chronologicalAge}:\n`;
+    
+    if (this.biologicalAge.factors) {
+      if (this.biologicalAge.factors.hrv?.score < 70) {
+        analysis += `- HRV Improvement (Score: ${this.biologicalAge.factors.hrv.score}): Practice stress management, meditation, or yoga\n`;
+      }
+      if (this.biologicalAge.factors.rhr?.score < 70) {
+        analysis += `- Cardiovascular Fitness (Score: ${this.biologicalAge.factors.rhr.score}): Increase cardio exercise to 3-4x/week\n`;
+      }
+      if (this.biologicalAge.factors.exercise?.score < 70) {
+        analysis += `- Exercise Frequency (Score: ${this.biologicalAge.factors.exercise.score}): Aim for 150+ minutes weekly activity\n`;
+      }
+      if (this.biologicalAge.factors.weight?.score < 70) {
+        analysis += `- Weight Optimization (Score: ${this.biologicalAge.factors.weight.score}): Focus on balanced nutrition and portion control\n`;
+      }
+    }
     
     if (this.biologicalAge.recommendations) {
-      analysis += `**AI Recommendations:**\n`;
+      analysis += `\nAdditional Recommendations:\n`;
       this.biologicalAge.recommendations.forEach((rec, index) => {
         analysis += `${index + 1}. ${rec}\n`;
       });
     }
 
     return analysis;
+  }
+
+  // Method to save document content for AI analysis
+  async saveDocumentContent(fileName: string, content: string, blobId?: string): Promise<void> {
+    try {
+      const documentData: DocumentData = {
+        name: fileName,
+        content: content,
+        blobId: blobId,
+        uploadedAt: new Date().toISOString(),
+      };
+
+      this.documents.push(documentData);
+      await AsyncStorage.setItem('@fitcentive_uploaded_documents', JSON.stringify(this.documents));
+      console.log(`✅ Saved document content for AI analysis: ${fileName}`);
+    } catch (error) {
+      console.error('❌ Failed to save document content:', error);
+    }
   }
 
   private analyzeHRV(): string {
@@ -444,7 +667,7 @@ class LocalAIService {
       
       if (dataType === 'health' || dataType === 'both') {
         // Simulate blockchain data retrieval
-        const blockchainInfo = await AsyncStorage.getItem('@walrus_blockchain_verification');
+        const blockchainInfo = await AsyncStorage.getItem('@fitcentive_blockchain_verification');
         if (blockchainInfo) {
           const info = JSON.parse(blockchainInfo);
           console.log(`📦 Found blockchain health data: ${info.complete_dataset_blob_id}`);

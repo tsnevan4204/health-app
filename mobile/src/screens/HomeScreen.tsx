@@ -22,66 +22,56 @@ import BiologicalAgeService, { BiologicalAgeData } from '../services/biologicalA
 
 // Storage keys for persistence
 const STORAGE_KEYS = {
-  HEALTH_DATA: '@wellrus_health_data',
-  BIOLOGICAL_AGE: '@wellrus_biological_age',
-  UPLOADED_DOCUMENTS: '@wellrus_uploaded_documents',
-  UPLOAD_STATUSES: '@wellrus_upload_statuses',
+  HEALTH_DATA: '@fitcentive_health_data',
+  BIOLOGICAL_AGE: '@fitcentive_biological_age',
+  UPLOADED_DOCUMENTS: '@fitcentive_uploaded_documents',
+  UPLOAD_STATUSES: '@fitcentive_upload_statuses',
 };
 
-// Animated Glistening Component
-interface GlistenProps {
-  children: React.ReactNode;
-  style?: any;
+// Function to format time since last upload
+function formatTimeSinceUpload(uploadTime: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - uploadTime.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  
+  if (diffMins < 1) {
+    return 'Just now';
+  } else if (diffMins === 1) {
+    return '1 minute ago';
+  } else if (diffMins < 60) {
+    return `${diffMins} minutes ago`;
+  } else if (diffMins < 1440) {
+    const hours = Math.floor(diffMins / 60);
+    return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+  } else {
+    const days = Math.floor(diffMins / 1440);
+    return days === 1 ? '1 day ago' : `${days} days ago`;
+  }
 }
 
-function Glisten({ children, style }: GlistenProps) {
-  const shimmerValue = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const createShimmerAnimation = () => {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(shimmerValue, {
-            toValue: 1,
-            duration: 2000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(shimmerValue, {
-            toValue: 0,
-            duration: 2000,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    };
-
-    createShimmerAnimation();
-  }, [shimmerValue]);
-
-  const translateX = shimmerValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-100, 100],
-  });
-
-  return (
-    <View style={[style, { overflow: 'hidden' }]}>
-      {children}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(255, 255, 255, 0.3)',
-          transform: [{ translateX }],
-          width: 50,
-          opacity: 0.6,
-        }}
-      />
-    </View>
-  );
+// Function to open Walrus explorer URLs
+async function openWalrusExplorer(blobId: string): Promise<void> {
+  try {
+    const walruscanUrl = `https://walruscan.com/testnet/blob/${blobId}`;
+    const supported = await Linking.canOpenURL(walruscanUrl);
+    
+    if (supported) {
+      await Linking.openURL(walruscanUrl);
+      console.log('✅ Successfully opened Walruscan explorer');
+    } else {
+      Alert.alert(
+        'Could not open browser',
+        `Unable to open Walruscan. Please visit manually: ${walruscanUrl}`,
+        [{ text: 'OK' }]
+      );
+    }
+  } catch (error) {
+    console.error('❌ Failed to open Walruscan URL:', error);
+    Alert.alert('Error', 'Could not open Walrus explorer');
+  }
 }
+
+// Component removed - no animations needed
 
 // Simple Chart Component
 interface SimpleChartProps {
@@ -208,6 +198,9 @@ export default function HomeScreen() {
   const [healthData, setHealthData] = useState<any>(null);
   const [biologicalAge, setBiologicalAge] = useState<BiologicalAgeData | null>(null);
   const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
+  const [lastUploadTime, setLastUploadTime] = useState<Date | null>(null);
+  const [lastWalrusBlobId, setLastWalrusBlobId] = useState<string | null>(null);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
 
   // Initialize app when component mounts
   useEffect(() => {
@@ -253,6 +246,17 @@ export default function HomeScreen() {
         const statuses = JSON.parse(storedStatuses);
         updateUploadStatuses(statuses);
         console.log('✅ [STORAGE] Loaded upload statuses:', statuses.length);
+      }
+
+      // Load last upload time and blob ID
+      const lastUploadTimeStr = await AsyncStorage.getItem('@fitcentive_last_walrus_upload');
+      if (lastUploadTimeStr) {
+        setLastUploadTime(new Date(lastUploadTimeStr));
+      }
+      
+      const lastBlobId = await AsyncStorage.getItem('@fitcentive_last_walrus_blob_id');
+      if (lastBlobId) {
+        setLastWalrusBlobId(lastBlobId);
       }
 
     } catch (error) {
@@ -336,7 +340,7 @@ export default function HomeScreen() {
         // Force a re-render to update the UI
         setIsHealthKitAvailable(true);
         Alert.alert(
-          'Health Access Granted! 🎉',
+          'Health Access Granted',
           'You can now fetch real health data from Apple Health.',
           [{ text: 'Continue', onPress: fetchHealthData }]
         );
@@ -344,7 +348,7 @@ export default function HomeScreen() {
         console.log('🔴 [UI] Permissions denied, showing retry dialog');
         Alert.alert(
           'Health Access Needed',
-          'To access your health data, please grant permissions in the Health app or try again.',
+          'To access your health data, please grant permissions in the Health app.',
           [
             { text: 'Try Again', onPress: requestHealthPermissions },
             { text: 'Use Demo Data', style: 'cancel' }
@@ -386,14 +390,8 @@ export default function HomeScreen() {
       await saveBiologicalAge(bioAge);
       
       Alert.alert(
-        'Mock Data Generated! 🎲',
-        `Successfully generated 30 days of health data:\\n` +
-        `• HRV: ${data.hrv.length} samples\\n` +
-        `• RHR: ${data.rhr.length} samples\\n` +
-        `• Weight: ${data.weight.length} samples\\n` +
-        `• Exercise: ${data.exercise.length} samples\\n\\n` +
-        `Biological Age: ${bioAge.biologicalAge} years\\n` +
-        `Ready to upload to Walrus!`
+        'Mock Data Generated',
+        `Successfully generated 30 days of health data with biological age of ${bioAge.biologicalAge} years. Ready to upload to Walrus.`
       );
     } catch (error) {
       console.error('Error generating mock data:', error);
@@ -411,17 +409,7 @@ export default function HomeScreen() {
 
     Alert.alert(
       'Biological Age Explained',
-      BiologicalAgeService.getExplanation() + 
-      `\\n\\nYour Results:\\n` +
-      `• Biological Age: ${biologicalAge.biologicalAge} years\\n` +
-      `• Chronological Age: ${biologicalAge.chronologicalAge} years\\n` +
-      `• Difference: ${biologicalAge.ageDifference > 0 ? '+' : ''}${biologicalAge.ageDifference} years\\n\\n` +
-      `${biologicalAge.interpretation}\\n\\n` +
-      `Key Factors:\\n` +
-      `• HRV: ${biologicalAge.factors.hrv.impact}\\n` +
-      `• RHR: ${biologicalAge.factors.rhr.impact}\\n` +
-      `• Exercise: ${biologicalAge.factors.exercise.impact}\\n` +
-      `• Weight: ${biologicalAge.factors.weight.impact}`,
+      `Your biological age is ${biologicalAge.biologicalAge} years compared to chronological age of ${biologicalAge.chronologicalAge} years. ${biologicalAge.interpretation}`,
       [{ text: 'Got it', style: 'default' }]
     );
   };
@@ -434,6 +422,7 @@ export default function HomeScreen() {
 
   const uploadDocument = async () => {
     try {
+      setUploadingDocument(true);
       const result = await DocumentPicker.getDocumentAsync({
         type: ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'],
         copyToCacheDirectory: true,
@@ -464,13 +453,15 @@ export default function HomeScreen() {
         });
 
         Alert.alert(
-          'Document Uploaded! 📄',
-          `Successfully uploaded ${document.name} to Walrus storage.\\n\\nBlob ID: ${blob.id}`
+          'Document Uploaded',
+          `Successfully uploaded ${document.name} to Walrus storage with blob ID ${blob.id}.`
         );
       }
     } catch (error) {
       console.error('Document upload error:', error);
       Alert.alert('Upload Error', 'Failed to upload document');
+    } finally {
+      setUploadingDocument(false);
     }
   };
 
@@ -518,12 +509,7 @@ export default function HomeScreen() {
       const dataSource = HealthKitService.isUsingMockData() ? 'Demo' : 'Apple Health';
       Alert.alert(
         'Data Fetched',
-        `Successfully fetched from ${dataSource}:\\n` +
-        `• HRV: ${data.hrv.length} samples\\n` +
-        `• RHR: ${data.rhr.length} samples\\n` +
-        `• Weight: ${data.weight.length} samples\\n` +
-        `• Exercise: ${data.exercise.length} samples\\n\\n` +
-        `Biological Age: ${bioAge.biologicalAge} years`
+        `Successfully fetched health data from ${dataSource} with biological age calculated as ${bioAge.biologicalAge} years.`
       );
     } catch (error) {
       console.error('Error fetching health data:', error);
@@ -785,7 +771,7 @@ export default function HomeScreen() {
       console.log('🔍 Complete blockchain verification info:', blockchainInfo);
 
       // Save blockchain info for future reference
-      await AsyncStorage.setItem('@walrus_blockchain_verification', JSON.stringify(blockchainInfo));
+      await AsyncStorage.setItem('@fitcentive_blockchain_verification', JSON.stringify(blockchainInfo));
       
       Alert.alert(
         'Complete Health Data Uploaded to Blockchain! 🎉',
@@ -796,6 +782,8 @@ export default function HomeScreen() {
             onPress: () => {
               console.log('🔗 Walruscan Manifest:', `https://walruscan.com/testnet/blob/${manifestBlob.id}`);
               console.log('📋 CLI Command:', `walrus blob-status ${manifestBlob.id}`);
+              // Open the Walruscan URL
+              openWalrusExplorer(manifestBlob.id);
             }
           },
           {
@@ -803,6 +791,8 @@ export default function HomeScreen() {
             onPress: () => {
               console.log('🔗 Walruscan Dataset:', `https://walruscan.com/testnet/blob/${completeDatasetBlob.id}`);
               console.log('📦 CLI Command:', `walrus blob-status ${completeDatasetBlob.id}`);
+              // Open the Walruscan URL
+              openWalrusExplorer(completeDatasetBlob.id);
             }
           },
           {
@@ -814,6 +804,11 @@ export default function HomeScreen() {
               console.log('🔗 Walruscan URLs:', blockchainInfo.blockchain_verification.walruscan_urls);
               console.log('💻 CLI Commands:', blockchainInfo.blockchain_verification.cli_verification_commands);
               console.log('🌐 API Endpoints:', blockchainInfo.blockchain_verification.api_verification_endpoints);
+              
+              // Open the complete dataset on Walruscan
+              if (blockchainInfo.complete_dataset_blob_id) {
+                openWalrusExplorer(blockchainInfo.complete_dataset_blob_id);
+              }
             }
           }
         ]
@@ -823,7 +818,7 @@ export default function HomeScreen() {
       console.error('❌ Comprehensive blockchain upload error:', error);
       Alert.alert(
         'Blockchain Upload Error', 
-        `Failed to upload complete health data to Walrus blockchain.\\n\\nError: ${error instanceof Error ? error.message : 'Unknown error'}\\n\\nThis may be due to:\\n• Network connectivity issues\\n• Walrus testnet availability\\n• Data size limitations\\n\\nTry again or check Walrus testnet status.`
+        `Failed to upload health data to Walrus blockchain due to ${error instanceof Error ? error.message : 'unknown error'}. Please check network connectivity and try again.`
       );
     } finally {
       setUploading(false);
@@ -926,55 +921,47 @@ export default function HomeScreen() {
         {/* Action Buttons - 2x2 Grid */}
         <View style={styles.buttonGridContainer}>
           <View style={styles.buttonRow}>
-            <Glisten style={[styles.gridButton, styles.fakeDataButton]}>
-          <TouchableOpacity
-                style={styles.gridButtonInner}
-            onPress={generateFakeData}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-                  <Text style={styles.gridButtonText}>Generate Mock Data</Text>
-            )}
-          </TouchableOpacity>
-            </Glisten>
+            <TouchableOpacity
+              style={[styles.gridButton, styles.fakeDataButton, loading && styles.buttonDisabled]}
+              onPress={generateFakeData}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Text style={styles.gridButtonText}>Generate Mock Data</Text>
+              )}
+            </TouchableOpacity>
           
-            <Glisten style={[styles.gridButton, styles.fetchButton]}>
-          <TouchableOpacity
-                style={styles.gridButtonInner}
-            onPress={() => {
-              console.log('🎯 [BUTTON] Connect to Apple Health button pressed!');
-              console.log('📊 [BUTTON] Button state - loading:', loading, 'isHealthKitAvailable:', isHealthKitAvailable);
-              fetchHealthData();
-            }}
-            disabled={loading || !isHealthKitAvailable}
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-                  <Text style={styles.gridButtonText}>
-{HealthKitService.isUsingMockData() ? ' Connect to Apple Health' : '📊 Fetch Real Health Data'}
-              </Text>
-            )}
-          </TouchableOpacity>
-            </Glisten>
+            {/* Data Last Uploaded Info */}
+            <View style={styles.lastUploadContainer}>
+              <Text style={styles.lastUploadLabel}>Data last uploaded</Text>
+              {lastUploadTime && lastWalrusBlobId ? (
+                <TouchableOpacity 
+                  style={styles.lastUploadLink}
+                  onPress={() => openWalrusExplorer(lastWalrusBlobId)}
+                >
+                  <Text style={styles.lastUploadTime}>{formatTimeSinceUpload(lastUploadTime)}</Text>
+                  <Text style={styles.lastUploadSubtext}>🔗 View on Walruscan</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.lastUploadTime}>No uploads yet</Text>
+              )}
+            </View>
           </View>
 
           <View style={styles.buttonRow}>
-            <Glisten style={[styles.gridButton, styles.uploadButton, !healthData && styles.buttonDisabled]}>
-          <TouchableOpacity
-                style={styles.gridButtonInner}
-            onPress={uploadToWalrus}
-            disabled={uploading || !healthData}
-          >
-            {uploading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-                  <Text style={styles.gridButtonText}>Upload to Walrus</Text>
-            )}
-          </TouchableOpacity>
-            </Glisten>
+            <TouchableOpacity
+              style={[styles.gridButton, styles.uploadButton, (!healthData || uploading) && styles.buttonDisabled]}
+              onPress={uploadToWalrus}
+              disabled={uploading || !healthData}
+            >
+              {uploading ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Text style={styles.gridButtonText}>Upload to Walrus</Text>
+              )}
+            </TouchableOpacity>
 
         </View>
               </View>
@@ -986,10 +973,15 @@ export default function HomeScreen() {
           <Text style={styles.sectionSubtitle}>Upload medical documents (PDF, DOCX)</Text>
           
           <TouchableOpacity
-            style={[styles.button, styles.documentButton]}
+            style={[styles.button, styles.documentButton, uploadingDocument && styles.buttonDisabled]}
             onPress={uploadDocument}
+            disabled={uploadingDocument}
           >
-            <Text style={styles.buttonText}>📄 Upload Document</Text>
+            {uploadingDocument ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <Text style={styles.buttonText}>📄 Upload Document</Text>
+            )}
           </TouchableOpacity>
 
           {uploadedDocuments.length > 0 && (
@@ -1033,7 +1025,13 @@ export default function HomeScreen() {
                   {status.status === 'success' ? '✓ Uploaded' : status.status}
                 </Text>
                 {status.blobId && (
-                  <Text style={styles.blobId}>ID: {status.blobId.substring(0, 8)}...</Text>
+                  <TouchableOpacity
+                    style={styles.blobIdLink}
+                    onPress={() => openWalrusExplorer(status.blobId)}
+                  >
+                    <Text style={styles.blobIdText}>🔗 View on Walruscan</Text>
+                    <Text style={styles.blobIdSubtext}>ID: {status.blobId.substring(0, 12)}...</Text>
+                  </TouchableOpacity>
                 )}
               </View>
             ))}
@@ -1403,6 +1401,58 @@ const styles = StyleSheet.create({
   blobId: {
     fontSize: 12,
     color: '#999',
+  },
+  blobIdLink: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: '#f0f9ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#0ea5e9',
+  },
+  blobIdText: {
+    fontSize: 14,
+    color: '#0ea5e9',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  blobIdSubtext: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  lastUploadContainer: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 16,
+    padding: 16,
+    marginLeft: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  lastUploadLabel: {
+    fontSize: 14,
+    color: '#6c757d',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  lastUploadLink: {
+    alignItems: 'center',
+  },
+  lastUploadTime: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#495057',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  lastUploadSubtext: {
+    fontSize: 12,
+    color: '#0ea5e9',
+    textAlign: 'center',
   },
   dropdownButton: {
     backgroundColor: '#f8f9fa',

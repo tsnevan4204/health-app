@@ -22,7 +22,7 @@ class BiologicalAgeService {
       exercise: HealthMetric[];
       weight: HealthMetric[];
     },
-    chronologicalAge: number = 35 // Default age for demo
+    chronologicalAge: number = Math.floor(Math.random() * 8) + 18 // Random age between 18-25
   ): BiologicalAgeData {
     
     // Calculate average values for each metric
@@ -92,9 +92,9 @@ class BiologicalAgeService {
   }
 
   private scoreWeight(avgWeight: number): number {
-    // Assuming healthy weight range 140-180 lbs for demo
-    const optimal = 160; // Middle of healthy range
-    const range = 20; // ±20 lbs from optimal
+    // Healthy weight range for young adults (18-25): 130-160 lbs
+    const optimal = 145; // Middle of healthy range for young adults
+    const range = 15; // ±15 lbs from optimal
     
     const deviation = Math.abs(avgWeight - optimal);
     if (deviation <= 5) return 100;
