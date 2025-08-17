@@ -12,14 +12,13 @@ import {
   Linking,
   Animated,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
 // Removed expo-web-browser import to avoid native module issues
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import HealthKitService, { HealthDataRange, HealthMetric } from '../services/healthKit';
 import WalrusService, { WalrusBlob } from '../services/walrus';
 import BiologicalAgeService, { BiologicalAgeData } from '../services/biologicalAge';
-import HederaBlockchainService, { HederaTransaction, HederaNFT } from '../services/hederaBlockchain';
-import HealthNFTService from '../services/healthNFTService';
 
 // Storage keys for persistence
 const STORAGE_KEYS = {
@@ -27,7 +26,6 @@ const STORAGE_KEYS = {
   BIOLOGICAL_AGE: '@wellrus_biological_age',
   UPLOADED_DOCUMENTS: '@wellrus_uploaded_documents',
   UPLOAD_STATUSES: '@wellrus_upload_statuses',
-  FLOW_TRANSACTIONS: '@wellrus_flow_transactions',
 };
 
 // Animated Glistening Component
@@ -202,6 +200,7 @@ async function openExternal(url: string, fallbackUrl?: string): Promise<void> {
 }
 
 export default function HomeScreen() {
+  const navigation = useNavigation();
   const [isHealthKitAvailable, setIsHealthKitAvailable] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -209,12 +208,6 @@ export default function HomeScreen() {
   const [healthData, setHealthData] = useState<any>(null);
   const [biologicalAge, setBiologicalAge] = useState<BiologicalAgeData | null>(null);
   const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
-  const [hederaTransactions, setHederaTransactions] = useState<HederaTransaction[]>([]);
-  const [selectedTransaction, setSelectedTransaction] = useState<HederaTransaction | null>(null);
-  const [showTransactionDropdown, setShowTransactionDropdown] = useState(false);
-  const [mintingNFT, setMintingNFT] = useState(false);
-  const [transactionStatus, setTransactionStatus] = useState<'idle' | 'processing' | 'success' | 'failed'>('idle');
-  const [transactionLink, setTransactionLink] = useState<string>('');
 
   // Initialize app when component mounts
   useEffect(() => {
@@ -262,13 +255,6 @@ export default function HomeScreen() {
         console.log('✅ [STORAGE] Loaded upload statuses:', statuses.length);
       }
 
-      // Load hedera transactions
-      const storedTransactions = await AsyncStorage.getItem(STORAGE_KEYS.FLOW_TRANSACTIONS);
-      if (storedTransactions) {
-        const transactions = JSON.parse(storedTransactions);
-        setHederaTransactions(transactions);
-        console.log('✅ [STORAGE] Loaded hedera transactions:', transactions.length);
-      }
     } catch (error) {
       console.error('❌ [STORAGE] Error loading persisted data:', error);
     }
@@ -310,14 +296,6 @@ export default function HomeScreen() {
     }
   };
 
-  const saveHederaTransactions = async (transactions: HederaTransaction[]) => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.FLOW_TRANSACTIONS, JSON.stringify(transactions));
-      console.log('💾 [STORAGE] Saved hedera transactions');
-    } catch (error) {
-      console.error('❌ [STORAGE] Error saving hedera transactions:', error);
-    }
-  };
 
   const updateUploadStatuses = (newStatuses: UploadStatus[]) => {
     setUploadStatuses(newStatuses);
@@ -342,11 +320,6 @@ export default function HomeScreen() {
     }
   };
 
-  const resetTransactionStatus = () => {
-    setTransactionStatus('idle');
-    setTransactionLink('');
-    setShowTransactionDropdown(false);
-  };
 
   const requestHealthPermissions = async () => {
     try {
@@ -451,6 +424,12 @@ export default function HomeScreen() {
       `• Weight: ${biologicalAge.factors.weight.impact}`,
       [{ text: 'Got it', style: 'default' }]
     );
+  };
+
+  const navigateToAskAI = (question: string) => {
+    (navigation as any).navigate('Ask', { 
+      initialQuestion: question 
+    });
   };
 
   const uploadDocument = async () => {
@@ -754,15 +733,15 @@ export default function HomeScreen() {
         updateUploadStatuses([...statuses]);
         
       console.log('📋 Creating blockchain-verifiable manifest...');
-      const manifest = await WalrusService.createManifest(blobs, {
+        const manifest = await WalrusService.createManifest(blobs, {
           startDate,
           endDate,
         deviceTypes: ['smartwatch', 'smartphone'],
         userId: 'anon_health_user_' + Math.random().toString(36).substring(2, 14),
-      });
+        });
 
-      const manifestBlob = await WalrusService.uploadManifest(manifest);
-      
+        const manifestBlob = await WalrusService.uploadManifest(manifest);
+        
       statuses[statuses.length - 1].status = 'success';
       statuses[statuses.length - 1].blobId = manifestBlob.id;
         updateUploadStatuses([...statuses]);
@@ -807,7 +786,7 @@ export default function HomeScreen() {
 
       // Save blockchain info for future reference
       await AsyncStorage.setItem('@walrus_blockchain_verification', JSON.stringify(blockchainInfo));
-
+      
       Alert.alert(
         'Complete Health Data Uploaded to Blockchain! 🎉',
         `All your anonymized health data is now stored on Walrus blockchain!\\n\\n📊 Total Streams: ${blobs.size}\\n📦 Complete Dataset: ${completeDatasetBlob.id}\\n📋 Manifest: ${manifestBlob.id}\\n🔒 Privacy: Fully anonymized & encrypted\\n\\n🔍 Verify on Blockchain:\\n• Walruscan Explorer\\n• CLI verification commands\\n• API endpoints\\n\\nAll personal information removed before blockchain storage.`,
@@ -851,108 +830,11 @@ export default function HomeScreen() {
     }
   };
 
-  const mintHealthDataNFT = async () => {
-    if (!healthData) {
-      Alert.alert('Error', 'Please generate or fetch health data first');
-      return;
-    }
-
-    try {
-      setMintingNFT(true);
-      setTransactionStatus('processing');
-      resetTransactionStatus();
-      
-      // First, ensure Hedera service is initialized
-      await HederaBlockchainService.initialize();
-      
-      // Upload encrypted health data to Walrus first
-      console.log('🔐 Encrypting and uploading health data to Walrus...');
-      const walrusBlob = await WalrusService.uploadHealthData(healthData, {
-        metric: 'complete_health_dataset',
-        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-        endDate: new Date(),
-        samples: Object.values(healthData).reduce((total: any, data) => 
-          total + (Array.isArray(data) ? data.length : 0), 0)
-      });
-      
-      // Get metrics from health data (no PII)
-      const metrics = Object.keys(healthData).filter(key => healthData[key]?.length > 0);
-      
-      // Create NFT with encrypted data reference
-      const nftName = `Anonymous Health Data - ${new Date().toLocaleDateString()}`;
-      const description = `Anonymized health metrics dataset. No personal information included.`;
-      const ageDiff = biologicalAge?.ageDifference ?? 0;
-      const rarity = ageDiff < 0 ? 'Legendary' : 
-                     ageDiff === 0 ? 'Epic' : 
-                     ageDiff < 5 ? 'Rare' : 'Common';
-      const price = rarity === 'Legendary' ? 50 : 
-                   rarity === 'Epic' ? 30 : 
-                   rarity === 'Rare' ? 20 : 10; // Price in HBAR
-      
-      Alert.alert(
-        'Minting NFT on Hedera...',
-        `Creating Hedera NFT with encrypted health data:\\n\\n• Metrics: ${metrics.length}\\n• Biological Age: ${biologicalAge?.biologicalAge || 'N/A'}\\n• Rarity: ${rarity}\\n• Price: ${price} HBAR\\n• Data Storage: Walrus (Encrypted)`,
-        [{ text: 'Continue', style: 'default' }]
-      );
-      
-      const transaction = await HederaBlockchainService.mintHealthDataNFT(
-        nftName,
-        description,
-        healthData,
-        walrusBlob.id,
-        metrics,
-        rarity,
-        price
-      );
-      
-      // Save transaction and update status
-      const updatedTransactions = [...hederaTransactions, transaction];
-      setHederaTransactions(updatedTransactions);
-      await saveHederaTransactions(updatedTransactions);
-      setSelectedTransaction(transaction);
-      setTransactionStatus('success');
-      setTransactionLink(transaction.explorerUrl || '');
-      setShowTransactionDropdown(true);
-      
-      // Log transaction details
-      HederaBlockchainService.logTransactionDetails(transaction);
-      
-      console.log('');
-      console.log('🎉 ================ NFT MINTED ON HEDERA ================');
-      console.log(`🔷 Network: Hedera Testnet`);
-      console.log(`💎 NFT Name: ${nftName}`);
-      console.log(`🆔 Transaction ID: ${transaction.transactionId}`);
-      console.log(`#️⃣ Serial Number: ${transaction.serialNumber}`);
-      console.log(`🔐 Encrypted Data: Stored on Walrus`);
-      console.log(`🔗 Explorer: ${transaction.explorerUrl}`);
-      console.log(`⏰ Timestamp: ${transaction.timestamp}`);
-      console.log('========================================================');
-      console.log('');
-      
-      Alert.alert(
-        'NFT Minted on Hedera! 🎉',
-        `Your health data NFT has been created on Hedera blockchain.\\n\\n` +
-        `Transaction ID: ${transaction.transactionId}\\n` +
-        `Serial Number: ${transaction.serialNumber || 'N/A'}\\n` +
-        `Status: ${transaction.status}\\n` +
-        `Price: ${price} HBAR\\n\\n` +
-        `Encrypted data stored on Walrus.\\n` +
-        `No personal information included in NFT.`
-      );
-      
-    } catch (error) {
-      console.error('NFT minting error:', error);
-      setTransactionStatus('failed');
-      Alert.alert('Minting Error', 'Failed to mint NFT on Hedera blockchain');
-    } finally {
-      setMintingNFT(false);
-    }
-  };
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Connect Wearable</Text>
+        <Text style={styles.title}>Fitcentive</Text>
         
         {/* Biological Age Display */}
         {biologicalAge && (
@@ -1040,40 +922,6 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Transaction Status Dropdown */}
-        {showTransactionDropdown && selectedTransaction && (
-          <View style={styles.transactionDropdown}>
-            <TouchableOpacity
-              style={styles.transactionDropdownHeader}
-              onPress={() => setShowTransactionDropdown(!showTransactionDropdown)}
-            >
-              <View>
-                <Text style={styles.transactionDropdownTitle}>NFT Transaction</Text>
-                <Text style={[
-                  styles.transactionDropdownStatus,
-                  transactionStatus === 'processing' && styles.statusProcessing,
-                  transactionStatus === 'success' && styles.statusSuccess,
-                  transactionStatus === 'failed' && styles.statusFailed
-                ]}>
-                  {transactionStatus === 'processing' ? '⏳ Processing...' :
-                   transactionStatus === 'success' ? '✅ Success' :
-                   transactionStatus === 'failed' ? '❌ Failed' : ''}
-                </Text>
-              </View>
-              <Text style={styles.dropdownArrow}>{showTransactionDropdown ? '▼' : '▶'}</Text>
-            </TouchableOpacity>
-            
-            {transactionLink && (
-              <View style={styles.transactionDropdownContent}>
-                <Text style={styles.transactionLinkLabel}>Transaction Link:</Text>
-                <TouchableOpacity onPress={() => console.log('Explorer URL:', transactionLink)}>
-                  <Text style={styles.transactionLinkText}>{transactionLink}</Text>
-                </TouchableOpacity>
-                <Text style={styles.transactionIdText}>ID: {selectedTransaction.transactionId}</Text>
-              </View>
-            )}
-          </View>
-        )}
 
         {/* Action Buttons - 2x2 Grid */}
         <View style={styles.buttonGridContainer}>
@@ -1128,19 +976,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
             </Glisten>
 
-            <Glisten style={[styles.gridButton, styles.flowButton, !healthData && styles.buttonDisabled]}>
-          <TouchableOpacity
-                style={styles.gridButtonInner}
-            onPress={mintHealthDataNFT}
-            disabled={mintingNFT || !healthData}
-          >
-            {mintingNFT ? (
-              <ActivityIndicator color="white" />
-            ) : (
-                  <Text style={styles.gridButtonText}>Package as NFT</Text>
-            )}
-          </TouchableOpacity>
-            </Glisten>
         </View>
               </View>
 
@@ -1161,7 +996,8 @@ export default function HomeScreen() {
             <View style={styles.documentsContainer}>
               <Text style={styles.documentsTitle}>Uploaded Documents:</Text>
               {uploadedDocuments.map((doc: any, index: number) => (
-                <View key={`doc-${index}`} style={styles.documentItem}>
+                <View key={`doc-${index}`}>
+                  <View style={styles.documentItem}>
                   <View style={styles.documentInfo}>
                     <Text style={styles.documentName}>{doc.name}</Text>
                     <Text style={styles.documentSize}>
@@ -1169,6 +1005,13 @@ export default function HomeScreen() {
                     </Text>
                   </View>
                   <Text style={styles.documentStatus}>✅</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.askAIButton}
+                    onPress={() => navigateToAskAI(`Please explain this document to me: ${doc.name}. Analyze the content and provide insights based on the health data available.`)}
+                  >
+                    <Text style={styles.askAIButtonText}>🤖 Ask AI</Text>
+                  </TouchableOpacity>
                 </View>
               ))}
             </View>
@@ -1439,6 +1282,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginLeft: 12,
   },
+  askAIButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  askAIButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   buttonContainer: {
     gap: 12,
   },
@@ -1645,61 +1502,5 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
-  },
-  transactionDropdown: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  transactionDropdownHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  transactionDropdownTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  transactionDropdownStatus: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  statusProcessing: {
-    color: '#ff9500',
-  },
-  statusFailed: {
-    color: '#ff3b30',
-  },
-  transactionDropdownContent: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e9ecef',
-  },
-  transactionLinkLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 4,
-  },
-  transactionLinkText: {
-    fontSize: 14,
-    color: '#007AFF',
-    textDecorationLine: 'underline',
-    marginBottom: 8,
-  },
-  transactionIdText: {
-    fontSize: 12,
-    color: '#999',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 });

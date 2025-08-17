@@ -144,7 +144,7 @@ export default function SellScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Health Research Bounties</Text>
-          <Text style={styles.subtitle}>Contribute anonymized health data to research studies</Text>
+          <Text style={styles.subtitle}>Contribute anonymized health data to research studies and earn rewards</Text>
         </View>
 
         {/* Health Bounties */}

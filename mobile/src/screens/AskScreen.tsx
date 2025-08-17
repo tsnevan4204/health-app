@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,45 +9,133 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
+import { useRoute, RouteProp } from '@react-navigation/native';
+import * as DocumentPicker from 'expo-document-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import LocalAIService from '../services/localAI';
 
 interface Message {
   id: string;
   text: string;
   isUser: boolean;
   timestamp: Date;
+  attachment?: {
+    name: string;
+    type: string;
+    size: number;
+  };
 }
 
+type RootStackParamList = {
+  Ask: { initialQuestion?: string };
+};
+
+type AskScreenRouteProp = RouteProp<RootStackParamList, 'Ask'>;
+
 export default function AskScreen() {
+  const route = useRoute<AskScreenRouteProp>();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: "Hi! I'm your health AI assistant. I can help you understand your health data, answer questions about your biological age, and provide personalized health insights. What would you like to know?",
+      text: "Hi! I'm your secure health AI assistant. I can help you understand your health data, answer questions about your biological age, and provide personalized health insights. You can also upload documents for analysis. What would you like to know?",
       isUser: false,
       timestamp: new Date(),
     }
   ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<any>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const sendMessage = async () => {
-    if (!inputText.trim()) return;
+  // Initialize AI service and handle initial question
+  useEffect(() => {
+    const initializeAI = async () => {
+      await LocalAIService.initialize();
+      
+      // Handle initial question from navigation params
+      const initialQuestion = route.params?.initialQuestion;
+      if (initialQuestion) {
+        // Auto-send the initial question
+        setTimeout(() => {
+          setInputText(initialQuestion);
+          // Auto-submit after a short delay
+          setTimeout(() => {
+            sendMessage(initialQuestion);
+          }, 500);
+        }, 1000);
+      }
+    };
+
+    initializeAI();
+  }, [route.params?.initialQuestion]);
+
+  const handleFileUpload = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['text/plain', 'application/pdf'],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        setUploadedFile(file);
+        
+        // Add message with file attachment
+        const fileMessage: Message = {
+          id: Date.now().toString(),
+          text: `📎 Uploaded: ${file.name}`,
+          isUser: true,
+          timestamp: new Date(),
+          attachment: {
+            name: file.name,
+            type: file.mimeType || 'unknown',
+            size: file.size || 0,
+          },
+        };
+
+        setMessages(prev => [...prev, fileMessage]);
+        setIsTyping(true);
+
+        // AI response for file upload
+        setTimeout(() => {
+          const aiResponse = `I've received your file "${file.name}". I can help analyze document content, answer questions about the information, or provide insights based on the data. What would you like to know about this document?`;
+          const aiMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            text: aiResponse,
+            isUser: false,
+            timestamp: new Date(),
+          };
+
+          setMessages(prev => [...prev, aiMessage]);
+          setIsTyping(false);
+        }, 1500);
+      }
+    } catch (error) {
+      Alert.alert('Upload Error', 'Failed to upload file. Please try again.');
+    }
+  };
+
+  const sendMessage = async (messageText?: string) => {
+    const text = messageText || inputText.trim();
+    if (!text) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: inputText.trim(),
+      text: text,
       isUser: true,
       timestamp: new Date(),
     };
 
     setMessages(prev => [...prev, userMessage]);
-    setInputText('');
+    if (!messageText) setInputText('');
     setIsTyping(true);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse = generateAIResponse(userMessage.text);
+    try {
+      // Use LocalAI service for response
+      const aiResponse = await LocalAIService.generateResponse(text);
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: aiResponse,
@@ -56,8 +144,18 @@ export default function AskScreen() {
       };
 
       setMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      console.error('AI response error:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "I'm having trouble processing your request right now. Please try again.",
+        isUser: false,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
 
     // Scroll to bottom
     setTimeout(() => {
@@ -65,51 +163,6 @@ export default function AskScreen() {
     }, 100);
   };
 
-  const generateAIResponse = (userMessage: string): string => {
-    const lowerMessage = userMessage.toLowerCase();
-    
-    if (lowerMessage.includes('biological age') || lowerMessage.includes('bio age')) {
-      return "Your biological age is calculated using key health metrics like HRV, resting heart rate, exercise minutes, and weight trends. A younger biological age suggests better health markers compared to your chronological age. Would you like me to explain any specific metric?";
-    }
-    
-    if (lowerMessage.includes('hrv') || lowerMessage.includes('heart rate variability')) {
-      return "Heart Rate Variability (HRV) measures the variation in time between heartbeats. Higher HRV generally indicates better autonomic nervous system health and stress resilience. You can improve HRV through meditation, quality sleep, and managing stress levels.";
-    }
-    
-    if (lowerMessage.includes('resting heart rate') || lowerMessage.includes('rhr')) {
-      return "Resting heart rate is your heart rate when you're at complete rest. A lower RHR (50-70 bpm) typically indicates better cardiovascular fitness. Regular cardio exercise is the best way to improve your resting heart rate.";
-    }
-    
-    if (lowerMessage.includes('exercise') || lowerMessage.includes('workout')) {
-      return "Regular exercise is crucial for maintaining good health. The WHO recommends at least 150 minutes of moderate exercise per week. Your exercise data shows your daily activity levels and helps calculate your biological age.";
-    }
-    
-    if (lowerMessage.includes('weight') || lowerMessage.includes('bmi')) {
-      return "Weight trends are an important health indicator. Maintaining a healthy weight through balanced nutrition and regular exercise supports overall metabolic health. Gradual, sustainable changes are most effective.";
-    }
-    
-    if (lowerMessage.includes('sell') || lowerMessage.includes('data') || lowerMessage.includes('blockchain')) {
-      return "You can monetize your health data through our Sell page! Package your anonymized health metrics and sell them on the Flow blockchain. This helps medical research while giving you control over your data's value.";
-    }
-    
-    if (lowerMessage.includes('walrus') || lowerMessage.includes('storage')) {
-      return "Your health data is securely stored using Walrus decentralized storage with encryption. This ensures your data remains private and under your control while being accessible for research purposes when you choose to sell it.";
-    }
-    
-    if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey')) {
-      return "Hello! I'm here to help you understand your health data and provide insights. Feel free to ask about your biological age, health metrics, or how to improve your wellness!";
-    }
-    
-    // Default responses
-    const defaultResponses = [
-      "That's an interesting question! Based on your health data, I'd recommend focusing on the metrics that impact your biological age the most. Would you like specific recommendations?",
-      "I can help you understand that better. Your health data provides valuable insights into your wellness trends. What specific aspect would you like to explore?",
-      "Great question! Your biological age and health metrics can guide personalized recommendations. Let me know if you'd like me to analyze any particular area of your health.",
-      "I'm here to help you make sense of your health data. Whether it's about improving your HRV, exercise habits, or overall wellness - what interests you most?",
-    ];
-    
-    return defaultResponses[Math.floor(Math.random() * defaultResponses.length)];
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -120,7 +173,7 @@ export default function AskScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Ask AI</Text>
+          <Text style={styles.headerTitle}>Ask Secure AI</Text>
           <Text style={styles.headerSubtitle}>Your Personal Health Assistant</Text>
         </View>
 
@@ -145,6 +198,16 @@ export default function AskScreen() {
               ]}>
                 {message.text}
               </Text>
+              {message.attachment && (
+                <View style={styles.attachmentInfo}>
+                  <Text style={[
+                    styles.attachmentText,
+                    message.isUser ? styles.userMessageText : styles.aiMessageText,
+                  ]}>
+                    📄 {message.attachment.name} ({(message.attachment.size / 1024).toFixed(1)} KB)
+                  </Text>
+                </View>
+              )}
               <Text style={[
                 styles.timestamp,
                 message.isUser ? styles.userTimestamp : styles.aiTimestamp,
@@ -170,6 +233,12 @@ export default function AskScreen() {
 
         {/* Input */}
         <View style={styles.inputContainer}>
+          <TouchableOpacity
+            style={styles.uploadButton}
+            onPress={handleFileUpload}
+          >
+            <Text style={styles.uploadButtonText}>📎</Text>
+          </TouchableOpacity>
           <TextInput
             style={styles.textInput}
             value={inputText}
@@ -178,12 +247,12 @@ export default function AskScreen() {
             placeholderTextColor="#999"
             multiline
             maxLength={500}
-            onSubmitEditing={sendMessage}
+            onSubmitEditing={() => sendMessage()}
             returnKeyType="send"
           />
           <TouchableOpacity
             style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-            onPress={sendMessage}
+            onPress={() => sendMessage()}
             disabled={!inputText.trim()}
           >
             <Text style={styles.sendButtonText}>Send</Text>
@@ -202,7 +271,8 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#4A90E2',
     padding: 20,
-    paddingTop: 10,
+    paddingTop: 50,
+    marginTop: 0,
   },
   headerTitle: {
     fontSize: 24,
@@ -327,5 +397,29 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
     fontSize: 16,
+  },
+  uploadButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 20,
+    marginRight: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 44,
+  },
+  uploadButtonText: {
+    fontSize: 18,
+    color: 'white',
+  },
+  attachmentInfo: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.2)',
+  },
+  attachmentText: {
+    fontSize: 12,
+    fontStyle: 'italic',
   },
 });
