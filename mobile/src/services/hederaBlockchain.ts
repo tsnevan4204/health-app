@@ -133,8 +133,9 @@ class HederaBlockchainService {
     walrusBlobId: string,
     metrics: string[],
     rarity: string,
-    price: number
-  ): Promise<HederaTransaction> {
+    price: number,
+    bountyAmount: number // USDC reward amount
+  ): Promise<HederaNFT> {
     try {
       console.log('🏥 Minting health data NFT on Hedera...');
       
